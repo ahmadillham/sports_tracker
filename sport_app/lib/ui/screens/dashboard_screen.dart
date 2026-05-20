@@ -5,8 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../providers/workout_provider.dart';
 import '../../providers/ble_provider.dart';
 import '../widgets/status_bar.dart';
-import '../widgets/metric_card.dart';
-import '../widgets/live_map_widget.dart';
+import '../widgets/osm_live_map.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -21,7 +20,6 @@ class DashboardScreen extends ConsumerWidget {
     final steps = sensorData?.stepCount ?? 0;
     final jumps = sensorData?.jumpCount ?? 0;
     
-    // Convert pitch to absolute lean angle (0 = upright)
     final pitch = sensorData?.pitch ?? 0.0;
     final leanAngle = (pitch.abs() > 90 ? 180 - pitch.abs() : pitch.abs()).toStringAsFixed(1);
 
@@ -30,15 +28,15 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SportTracker'),
+        title: const Text('SPORT TRACKER'),
         actions: [
           if (activeWorkout.isActive)
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Center(
                 child: Text(
-                  '${activeWorkout.mode.icon} ${activeWorkout.mode.label}',
-                  style: const TextStyle(fontSize: 16),
+                  '${activeWorkout.mode.icon} ${activeWorkout.mode.label.toUpperCase()}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppTheme.primary),
                 ),
               ),
             ),
@@ -72,13 +70,13 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildModeSelector(BuildContext context, WidgetRef ref) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Select Activity',
+              'SELECT ACTIVITY',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 32),
@@ -96,6 +94,21 @@ class DashboardScreen extends ConsumerWidget {
               mode: SportMode.jumpRope,
               onTap: () => _start(ref, SportMode.jumpRope),
             ),
+            const SizedBox(height: 16),
+            _ModeButton(
+              mode: SportMode.pushup,
+              onTap: () => _start(ref, SportMode.pushup),
+            ),
+            const SizedBox(height: 16),
+            _ModeButton(
+              mode: SportMode.squat,
+              onTap: () => _start(ref, SportMode.squat),
+            ),
+            const SizedBox(height: 16),
+            _ModeButton(
+              mode: SportMode.plank,
+              onTap: () => _start(ref, SportMode.plank),
+            ),
           ],
         ),
       ),
@@ -103,7 +116,6 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   void _start(WidgetRef ref, SportMode mode) {
-    // Send command to ESP32: mode and Max HR (hardcoded to 180 for now)
     ref.read(bleServiceProvider).sendCommand(mode, 180);
     ref.read(activeWorkoutProvider.notifier).startWorkout(mode);
   }
@@ -129,113 +141,126 @@ class DashboardScreen extends ConsumerWidget {
 
     return Column(
       children: [
-        // ── Top Summary ──
+        // ── Top Stats Grid ──
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          child: Column(
             children: [
-              _SummaryStat(label: 'TIME', value: timeStr),
-              _SummaryStat(
-                label: 'CALORIES',
-                value: state.caloriesBurned.toStringAsFixed(0),
-                unit: 'kcal',
+              // Primary row (Time & HR usually)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _PrimaryStat(label: 'TIME', value: timeStr),
+                  ),
+                  Expanded(
+                    child: _PrimaryStat(label: 'AVG HR', value: hr.toString(), unit: 'bpm', isHighlight: true),
+                  ),
+                ],
               ),
+              const SizedBox(height: 16),
+              // Secondary row based on mode
+              if (state.mode == SportMode.running || state.mode == SportMode.cycling)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _PrimaryStat(label: 'DISTANCE', value: distance, unit: 'km'),
+                    ),
+                    Expanded(
+                      child: _PrimaryStat(label: 'PACE', value: speed, unit: 'km/h'),
+                    ),
+                  ],
+                ),
+              if (state.mode == SportMode.jumpRope || state.mode == SportMode.pushup || state.mode == SportMode.squat)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _PrimaryStat(label: 'REPS', value: jumps.toString(), unit: 'reps'),
+                    ),
+                    Expanded(
+                      child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal'),
+                    ),
+                  ],
+                ),
+              if (state.mode == SportMode.plank)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: jumps == 0 ? AppTheme.success.withValues(alpha: 0.1) : AppTheme.danger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: jumps == 0 ? AppTheme.success : AppTheme.danger, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        jumps == 0 ? 'GOOD POSTURE' : 'WARNING: FIX FORM',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: jumps == 0 ? AppTheme.success : AppTheme.danger,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (state.mode == SportMode.cycling)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _PrimaryStat(label: 'LEAN ANGLE', value: leanAngle, unit: '°'),
+                      ),
+                      Expanded(
+                        child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal'),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
 
-        // ── Metrics Grid ──
-        Expanded(
-          flex: 4,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: GridView.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.5,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                MetricCard(
-                  title: 'HEART RATE',
-                  value: hr.toString(),
-                  unit: 'bpm',
-                  icon: Icons.favorite,
-                  iconColor: AppTheme.heartRed,
-                  animatePulse: hr > 0,
-                ),
-                if (state.mode == SportMode.running)
-                  MetricCard(
-                    title: 'STEPS',
-                    value: steps.toString(),
-                    unit: 'steps',
-                    icon: Icons.directions_run,
-                  ),
-                if (state.mode == SportMode.jumpRope)
-                  MetricCard(
-                    title: 'JUMPS',
-                    value: jumps.toString(),
-                    unit: 'reps',
-                    icon: Icons.sports_gymnastics,
-                  ),
-                if (state.mode == SportMode.running || state.mode == SportMode.cycling) ...[
-                  MetricCard(
-                    title: 'SPEED',
-                    value: speed,
-                    unit: 'km/h',
-                    icon: Icons.speed,
-                  ),
-                  MetricCard(
-                    title: 'DISTANCE',
-                    value: distance,
-                    unit: 'km',
-                    icon: Icons.route,
-                  ),
-                ],
-                if (state.mode == SportMode.cycling)
-                  MetricCard(
-                    title: 'LEAN',
-                    value: leanAngle,
-                    unit: '°',
-                    icon: Icons.screen_rotation,
-                  ),
-              ],
-            ),
-          ),
-        ),
-
         // ── Map (Only for GPS modes) ──
-        if (state.mode != SportMode.jumpRope)
+        if (state.mode == SportMode.running || state.mode == SportMode.cycling)
           Expanded(
-            flex: 5,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: LiveMapWidget(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: OsmLiveMap(
                 routePoints: state.routePoints,
                 currentLat: lat,
                 currentLng: lng,
                 hasFix: gpsFix,
               ),
             ),
-          ),
+          )
+        else
+           const Spacer(),
 
-        // ── Controls ──
+        // ── Bottom Action ──
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(24.0),
           child: SizedBox(
             width: double.infinity,
+            height: 64,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
               ),
               onPressed: () {
-                // Send idle command to ESP32
                 ref.read(bleServiceProvider).sendCommand(SportMode.idle, 180);
                 ref.read(activeWorkoutProvider.notifier).stopWorkoutAndSave();
               },
-              child: const Text('STOP WORKOUT'),
+              child: Text(
+                'FINISH WORKOUT',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  letterSpacing: 2.0,
+                ),
+              ),
             ),
           ),
         ),
@@ -254,21 +279,23 @@ class _ModeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: AppTheme.glassCard(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.surfaceLight),
+        ),
         child: Row(
           children: [
             Text(mode.icon, style: const TextStyle(fontSize: 32)),
-            const SizedBox(width: 16),
+            const SizedBox(width: 24),
             Text(
-              mode.label,
-              style: Theme.of(context).textTheme.titleLarge,
+              mode.label.toUpperCase(),
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
-            const Spacer(),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.primary),
           ],
         ),
       ),
@@ -276,38 +303,46 @@ class _ModeButton extends StatelessWidget {
   }
 }
 
-class _SummaryStat extends StatelessWidget {
+class _PrimaryStat extends StatelessWidget {
   final String label;
   final String value;
   final String? unit;
+  final bool isHighlight;
 
-  const _SummaryStat({required this.label, required this.value, this.unit});
+  const _PrimaryStat({
+    required this.label, 
+    required this.value, 
+    this.unit,
+    this.isHighlight = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: isHighlight ? AppTheme.primary : AppTheme.textSecondary,
+          ),
         ),
-        const SizedBox(height: 4),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
               value,
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 40),
+              style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                color: isHighlight ? AppTheme.primary : AppTheme.textPrimary,
+              ),
             ),
             if (unit != null) ...[
-              const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  unit!,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppTheme.primary,
-                      ),
+              const SizedBox(width: 8),
+              Text(
+                unit!,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppTheme.textSecondary,
                 ),
               ),
             ]

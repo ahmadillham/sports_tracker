@@ -4,36 +4,21 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  // ── Color Palette ──
-  static const Color primary = Color(0xFF00D4AA);
-  static const Color primaryDark = Color(0xFF00A88A);
-  static const Color accent = Color(0xFF00BCD4);
-  static const Color background = Color(0xFF0A0E21);
-  static const Color surface = Color(0xFF1A1F38);
-  static const Color surfaceLight = Color(0xFF252A45);
-  static const Color cardColor = Color(0xFF1E2340);
+  // ── Color Palette (Strava Inspired) ──
+  static const Color primary = Color(0xFFFC4C02); // Strava Orange
+  static const Color primaryDark = Color(0xFFE34402);
+  static const Color accent = Color(0xFFFF6B00);
+  
+  static const Color background = Color(0xFF121212); // Deep dark background
+  static const Color surface = Color(0xFF1E1E1E);    // Slightly lighter for cards
+  static const Color surfaceLight = Color(0xFF2C2C2C);
+  
   static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0xFFB0B8D1);
-  static const Color textMuted = Color(0xFF6B7394);
+  static const Color textSecondary = Color(0xFFA0A0A0);
+  static const Color textMuted = Color(0xFF6E6E6E);
+  
   static const Color danger = Color(0xFFFF4757);
-  static const Color warning = Color(0xFFFFBE21);
   static const Color success = Color(0xFF2ED573);
-  static const Color heartRed = Color(0xFFFF6B6B);
-
-  static final LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, accent],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static final LinearGradient cardGradient = LinearGradient(
-    colors: [
-      surface.withValues(alpha: 0.8),
-      cardColor.withValues(alpha: 0.6),
-    ],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
 
   // ── Theme Data ──
   static ThemeData get darkTheme {
@@ -47,102 +32,94 @@ class AppTheme {
         surface: surface,
         error: danger,
       ),
-      textTheme: GoogleFonts.interTextTheme(
-        const TextTheme(
-          displayLarge: TextStyle(
-            fontSize: 48,
-            fontWeight: FontWeight.w700,
-            color: textPrimary,
-            letterSpacing: -1.5,
-          ),
-          headlineMedium: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w600,
-            color: textPrimary,
-          ),
-          titleLarge: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: textPrimary,
-          ),
-          titleMedium: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: textPrimary,
-          ),
-          bodyLarge: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-            color: textSecondary,
-          ),
-          bodyMedium: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: textSecondary,
-          ),
-          labelLarge: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: textPrimary,
-            letterSpacing: 0.5,
-          ),
-          labelSmall: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: textMuted,
-            letterSpacing: 0.5,
-          ),
+      textTheme: TextTheme(
+        // Massive, bold numbers for dashboard metrics
+        displayLarge: GoogleFonts.barlowCondensed(
+          fontSize: 72,
+          fontWeight: FontWeight.w800,
+          color: textPrimary,
+          letterSpacing: -1.0,
+        ),
+        displayMedium: GoogleFonts.barlowCondensed(
+          fontSize: 48,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+          letterSpacing: -0.5,
+        ),
+        headlineMedium: GoogleFonts.inter(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+        ),
+        titleLarge: GoogleFonts.inter(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: textPrimary,
+        ),
+        titleMedium: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
+        bodyLarge: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+          color: textSecondary,
+        ),
+        bodyMedium: GoogleFonts.inter(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: textSecondary,
+        ),
+        // Clean labels for metrics (e.g., "AVG HR", "DISTANCE")
+        labelLarge: GoogleFonts.inter(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: textSecondary,
+          letterSpacing: 1.2,
+        ),
+        labelSmall: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textMuted,
+          letterSpacing: 1.0,
         ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: background,
+        backgroundColor: surface,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: textPrimary,
         ),
         iconTheme: const IconThemeData(color: textPrimary),
       ),
       cardTheme: CardThemeData(
-        color: cardColor,
+        color: surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: surfaceLight, width: 1),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: background,
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: GoogleFonts.inter(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.0,
           ),
         ),
       ),
       iconTheme: const IconThemeData(color: textSecondary),
-    );
-  }
-
-  // ── Glassmorphism Card Decoration ──
-  static BoxDecoration glassCard({Color? borderColor}) {
-    return BoxDecoration(
-      gradient: cardGradient,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: borderColor ?? Colors.white.withValues(alpha: 0.08),
-        width: 1,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.2),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-        ),
-      ],
     );
   }
 }

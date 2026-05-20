@@ -26,10 +26,13 @@ class BleConstants {
 
 /// Sport modes matching ESP32 firmware enum.
 enum SportMode {
-  idle(0x00, 'Idle', '⏸'),
+  idle(0x00, 'Idle', '⏸️'),
   running(0x01, 'Running', '🏃'),
   cycling(0x02, 'Cycling', '🚴'),
-  jumpRope(0x03, 'Jump Rope', '🪢');
+  jumpRope(0x03, 'Jump Rope', '🦘'),
+  pushup(0x04, 'Push-up', '🏋️'),
+  squat(0x05, 'Squat', '🧍'),
+  plank(0x06, 'Plank', '🧘');
 
   const SportMode(this.code, this.label, this.icon);
   final int code;

@@ -3,13 +3,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/theme/app_theme.dart';
 
-class LiveMapWidget extends StatelessWidget {
+class OsmLiveMap extends StatefulWidget {
   final List<List<double>> routePoints;
   final double currentLat;
   final double currentLng;
   final bool hasFix;
 
-  const LiveMapWidget({
+  const OsmLiveMap({
     super.key,
     required this.routePoints,
     required this.currentLat,
@@ -18,20 +18,47 @@ class LiveMapWidget extends StatelessWidget {
   });
 
   @override
+  State<OsmLiveMap> createState() => _OsmLiveMapState();
+}
+
+class _OsmLiveMapState extends State<OsmLiveMap> {
+  final MapController _mapController = MapController();
+  
+  @override
+  void didUpdateWidget(covariant OsmLiveMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Animate or pan camera if we have a new valid fix
+    if (widget.hasFix && 
+        widget.currentLat != 0.0 && 
+        (oldWidget.currentLat != widget.currentLat || oldWidget.currentLng != widget.currentLng)) {
+      _mapController.move(LatLng(widget.currentLat, widget.currentLng), 17.0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final points = routePoints.map((p) => LatLng(p[0], p[1])).toList();
-    final center = hasFix && currentLat != 0.0
-        ? LatLng(currentLat, currentLng)
-        : (points.isNotEmpty ? points.last : const LatLng(0, 0));
+    final List<LatLng> polylinePoints = widget.routePoints
+        .map((p) => LatLng(p[0], p[1]))
+        .toList();
+        
+    final initialTarget = (widget.hasFix && widget.currentLat != 0.0) 
+        ? LatLng(widget.currentLat, widget.currentLng) 
+        : (polylinePoints.isNotEmpty ? polylinePoints.last : const LatLng(0, 0));
 
     return Container(
-      decoration: AppTheme.glassCard(),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.surfaceLight),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           FlutterMap(
+            mapController: _mapController,
             options: MapOptions(
-              initialCenter: center,
+              initialCenter: initialTarget,
               initialZoom: 16.0,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
@@ -57,27 +84,27 @@ class LiveMapWidget extends StatelessWidget {
               PolylineLayer(
                 polylines: [
                   Polyline(
-                    points: points,
-                    color: AppTheme.primary,
-                    strokeWidth: 4.0,
+                    points: polylinePoints,
+                    color: AppTheme.primary, // Strava Orange
+                    strokeWidth: 6.0,
                   ),
                 ],
               ),
-              if (hasFix && currentLat != 0.0)
+              if (widget.hasFix && widget.currentLat != 0.0)
                 MarkerLayer(
                   markers: [
                     Marker(
-                      point: LatLng(currentLat, currentLng),
-                      width: 20,
-                      height: 20,
+                      point: LatLng(widget.currentLat, widget.currentLng),
+                      width: 24,
+                      height: 24,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppTheme.accent,
+                          color: AppTheme.primary,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.accent.withValues(alpha: 0.5),
+                              color: AppTheme.primary.withValues(alpha: 0.5),
                               blurRadius: 10,
                               spreadRadius: 2,
                             )
@@ -89,18 +116,18 @@ class LiveMapWidget extends StatelessWidget {
                 ),
             ],
           ),
-          if (!hasFix)
+          if (!widget.hasFix)
             Container(
-              color: AppTheme.background.withValues(alpha: 0.7),
+              color: AppTheme.background.withValues(alpha: 0.8),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.gps_off, color: AppTheme.textMuted, size: 32),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Text(
-                      'Waiting for GPS Lock...',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      'WAITING FOR GPS LOCK',
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
                   ],
                 ),

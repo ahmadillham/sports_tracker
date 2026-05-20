@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../providers/ble_provider.dart';
 import 'dashboard_screen.dart';
@@ -104,7 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: AppTheme.primaryGradient,
+                    color: AppTheme.primary,
                     boxShadow: [
                       BoxShadow(
                         color: AppTheme.primary.withValues(alpha: 0.3),
