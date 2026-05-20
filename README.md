@@ -8,7 +8,7 @@ A headless (no screen, no physical buttons) wearable sports tracker based on the
 *   **IMU:** GY-85 / HW579 (9-DOF Accelerometer, Gyroscope, Magnetometer)
 *   **GPS:** NEO-7M
 *   **Feedback:** Active Buzzer (Active Low)
-*   **Power:** 18650 Battery with a Power Bank Module and a Voltage Divider for battery monitoring
+*   **Power:** 18650 Battery with a Power Bank Module
 
 ## Wiring Guide
 
@@ -32,8 +32,6 @@ Here is the connection table between the ESP32 and the various hardware componen
 | **Active Buzzer** | I/O (Signal) | **GPIO 27** | Active LOW logic (LOW = ON, HIGH = OFF) |
 | | VCC | 3.3V / 5V | Power supply |
 | | GND | GND | Ground |
-| **Battery Monitor** | Output | **GPIO 35** | Connect to a 2:1 Voltage Divider (ADC1_CH7) to step down the max 4.2V battery to the ESP32's 3.3V max ADC range. |
-
 ## Software Architecture
 
 ### Firmware (PlatformIO)
