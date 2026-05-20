@@ -61,7 +61,10 @@ enum SportMode : uint8_t {
     MODE_IDLE       = 0x00,
     MODE_RUNNING    = 0x01,
     MODE_CYCLING    = 0x02,
-    MODE_JUMP_ROPE  = 0x03
+    MODE_JUMP_ROPE  = 0x03,
+    MODE_PUSHUP     = 0x04,
+    MODE_SQUAT      = 0x05,
+    MODE_PLANK      = 0x06
 };
 
 // ──────────────────────────────────────────────
@@ -128,6 +131,17 @@ extern volatile bool     g_gpsLockAcquired;
 // Jump detection
 #define JUMP_THRESHOLD              1.80f   // G-force threshold for jump peak
 #define JUMP_DEBOUNCE_MS            250     // Minimum ms between jumps
+
+// Push-up detection
+#define PUSHUP_THRESHOLD            1.25f   // G-force threshold for push-up peak
+#define PUSHUP_DEBOUNCE_MS          600     // Minimum ms between push-ups
+
+// Squat detection
+#define SQUAT_THRESHOLD             1.15f   // G-force threshold for squat peak
+#define SQUAT_DEBOUNCE_MS           800     // Minimum ms between squats
+
+// Plank posture
+#define PLANK_ANGLE_TOLERANCE       15.0f   // Max degrees of deviation before warning
 
 // HR detection
 #define HR_SAMPLE_RATE_MS           5       // 200 Hz analog sampling

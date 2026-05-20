@@ -56,6 +56,7 @@ class DashboardScreen extends ConsumerWidget {
                     jumps,
                     speed,
                     distance,
+                    pitch,
                     leanAngle,
                     gpsData?.fixValid ?? false,
                     gpsData?.latitude ?? 0.0,
@@ -129,6 +130,7 @@ class DashboardScreen extends ConsumerWidget {
     int jumps,
     String speed,
     String distance,
+    double pitch,
     String leanAngle,
     bool gpsFix,
     double lat,
@@ -183,6 +185,30 @@ class DashboardScreen extends ConsumerWidget {
                       child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal'),
                     ),
                   ],
+                ),
+              if (state.mode == SportMode.running || state.mode == SportMode.jumpRope)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: pitch.abs() > 20.0 ? AppTheme.danger.withValues(alpha: 0.1) : AppTheme.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: pitch.abs() > 20.0 ? AppTheme.danger : AppTheme.success, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        pitch.abs() > 20.0 
+                            ? 'POSTUR: MEMBUNGKUK (${pitch.abs().toStringAsFixed(1)}°)' 
+                            : 'POSTUR: IDEAL (${pitch.abs().toStringAsFixed(1)}°)',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: pitch.abs() > 20.0 ? AppTheme.danger : AppTheme.success,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               if (state.mode == SportMode.plank)
                 Padding(

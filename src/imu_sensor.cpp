@@ -75,7 +75,7 @@ bool imu_init() {
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
     Wire.setClock(400000); // 400 kHz Fast I2C
 
-    // Check all three devices
+    // Check all three devices (Magnetometer is optional as newer clones use QMC5883L at 0x0D)
     if (!devicePresent(ADXL345_ADDR)) {
         Serial.println("[IMU] ADXL345 not found!");
         return false;
@@ -84,9 +84,10 @@ bool imu_init() {
         Serial.println("[IMU] ITG3200 not found!");
         return false;
     }
-    if (!devicePresent(HMC5883L_ADDR)) {
-        Serial.println("[IMU] HMC5883L not found!");
-        return false;
+    
+    bool hasHMC = devicePresent(HMC5883L_ADDR);
+    if (!hasHMC) {
+        Serial.println("[IMU] HMC5883L not found (Likely QMC5883L at 0x0D). Magnetometer disabled.");
     }
 
     // ── ADXL345 Init ──
@@ -106,13 +107,15 @@ bool imu_init() {
     // Sample rate divider = 9 → 100 Hz (1000 / (1+9))
     writeRegister(ITG3200_ADDR, ITG3200_REG_SMPLRT_DIV, 0x09);
 
-    // ── HMC5883L Init ──
-    // 8 samples averaged, 75 Hz output rate, normal measurement
-    writeRegister(HMC5883L_ADDR, HMC5883L_REG_CONFIG_A, 0x78);
-    // Gain = ±1.3 Ga (default)
-    writeRegister(HMC5883L_ADDR, HMC5883L_REG_CONFIG_B, 0x20);
-    // Continuous measurement mode
-    writeRegister(HMC5883L_ADDR, HMC5883L_REG_MODE, 0x00);
+    // ── HMC5883L Init (Optional) ──
+    if (hasHMC) {
+        // 8 samples averaged, 75 Hz output rate, normal measurement
+        writeRegister(HMC5883L_ADDR, HMC5883L_REG_CONFIG_A, 0x78);
+        // Gain = ±1.3 Ga (default)
+        writeRegister(HMC5883L_ADDR, HMC5883L_REG_CONFIG_B, 0x20);
+        // Continuous measurement mode
+        writeRegister(HMC5883L_ADDR, HMC5883L_REG_MODE, 0x00);
+    }
 
     Serial.println("[IMU] All GY-85 sensors initialized OK.");
     return true;
@@ -137,13 +140,16 @@ bool imu_read(IMURawData &data) {
     data.gy = (int16_t)(buf[2] << 8 | buf[3]);
     data.gz = (int16_t)(buf[4] << 8 | buf[5]);
 
-    // ── Read HMC5883L (big-endian, order: X, Z, Y!) ──
-    if (!readRegisters(HMC5883L_ADDR, HMC5883L_REG_DATAX_H, buf, 6)) {
-        return false;
+    // ── Read HMC5883L (Optional) ──
+    if (devicePresent(HMC5883L_ADDR)) {
+        if (readRegisters(HMC5883L_ADDR, HMC5883L_REG_DATAX_H, buf, 6)) {
+            data.mx = (int16_t)(buf[0] << 8 | buf[1]);
+            data.mz = (int16_t)(buf[2] << 8 | buf[3]);  // Z comes before Y
+            data.my = (int16_t)(buf[4] << 8 | buf[5]);
+        }
+    } else {
+        data.mx = 0; data.my = 0; data.mz = 0;
     }
-    data.mx = (int16_t)(buf[0] << 8 | buf[1]);
-    data.mz = (int16_t)(buf[2] << 8 | buf[3]);  // Z comes before Y
-    data.my = (int16_t)(buf[4] << 8 | buf[5]);
 
     return true;
 }

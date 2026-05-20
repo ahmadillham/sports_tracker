@@ -68,19 +68,27 @@ void taskSensor(void *param) {
         PostureData posture = {0.0f, 0.0f};
 
         if (imuOk && currentMode != MODE_IDLE) {
-            // Step detection (Running mode)
+            // Rep counting modes
             if (currentMode == MODE_RUNNING) {
                 algo_detect_step(imuRaw);
-            }
-
-            // Jump detection (Jump Rope mode)
-            if (currentMode == MODE_JUMP_ROPE) {
+            } else if (currentMode == MODE_JUMP_ROPE) {
                 algo_detect_jump(imuRaw);
+            } else if (currentMode == MODE_PUSHUP) {
+                algo_detect_pushup(imuRaw);
+            } else if (currentMode == MODE_SQUAT) {
+                algo_detect_squat(imuRaw);
             }
 
-            // Posture (Running + Cycling)
-            if (currentMode == MODE_RUNNING || currentMode == MODE_CYCLING) {
+            // Posture tracking (Running, Cycling, Jump Rope, Plank)
+            if (currentMode == MODE_RUNNING || currentMode == MODE_CYCLING || currentMode == MODE_JUMP_ROPE || currentMode == MODE_PLANK) {
                 posture = algo_update_posture(imuRaw, dt);
+                
+                if (currentMode == MODE_PLANK) {
+                    uint8_t warning = algo_check_plank_posture(posture.pitch);
+                    if (warning == 1 && !buzzer_is_playing()) {
+                        buzzer_trigger(BUZZ_HR_WARNING); // Double beep
+                    }
+                }
             }
         }
 
@@ -89,17 +97,20 @@ void taskSensor(void *param) {
             if (!buzzer_is_playing()) {
                 buzzer_trigger(BUZZ_HR_WARNING);
             }
-        } else {
-            // Stop HR warning if heart rate drops back
-            // (only if the current pattern IS the HR warning)
-            // We don't stop other patterns
         }
 
         // ── Update shared sensor data ──
         if (xSemaphoreTake(xDataMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
             g_sensorData.heartRate = bpm;
             g_sensorData.stepCount = algo_get_steps();
-            g_sensorData.jumpCount = algo_get_jumps();
+            
+            // Reuse jumpCount for reps or plank posture flag
+            if (currentMode == MODE_PLANK) {
+                g_sensorData.jumpCount = algo_check_plank_posture(posture.pitch);
+            } else {
+                g_sensorData.jumpCount = algo_get_reps();
+            }
+            
             g_sensorData.pitch     = posture.pitch;
             g_sensorData.roll      = posture.roll;
             xSemaphoreGive(xDataMutex);

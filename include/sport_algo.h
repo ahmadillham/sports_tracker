@@ -53,14 +53,31 @@ bool algo_detect_jump(const IMURawData &data);
 PostureData algo_update_posture(const IMURawData &data, float dt);
 
 /**
+ * @brief Process one IMU sample for push-up detection.
+ */
+bool algo_detect_pushup(const IMURawData &data);
+
+/**
+ * @brief Process one IMU sample for squat detection.
+ */
+bool algo_detect_squat(const IMURawData &data);
+
+/**
+ * @brief Check if current plank posture deviates from initial capture.
+ * @param pitch Current pitch from algo_update_posture
+ * @return 0 for Good, 1 for Warning
+ */
+uint8_t algo_check_plank_posture(float pitch);
+
+/**
  * @brief Get current step count.
  */
 uint32_t algo_get_steps();
 
 /**
- * @brief Get current jump count.
+ * @brief Get current generic rep count (used for jumps, push-ups, squats).
  */
-uint32_t algo_get_jumps();
+uint32_t algo_get_reps();
 
 /**
  * @brief Reset step and jump counters to zero.
