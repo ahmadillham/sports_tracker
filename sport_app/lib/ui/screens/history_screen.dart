@@ -60,7 +60,7 @@ class HistoryScreen extends ConsumerWidget {
                           children: [
                             CircleAvatar(
                               backgroundColor: AppTheme.background,
-                              child: Text(session.mode.icon, style: const TextStyle(fontSize: 20)),
+                              child: Icon(session.mode.icon, color: AppTheme.primary, size: 20),
                             ),
                             const SizedBox(width: 12),
                             Column(

@@ -7,19 +7,23 @@ import '../../providers/ble_provider.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/osm_live_map.dart';
 
+/// A Riverpod provider to track the currently *selected* mode before starting.
+final selectedModeProvider = StateProvider<SportMode>((ref) => SportMode.running);
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeWorkout = ref.watch(activeWorkoutProvider);
+    final selectedMode = ref.watch(selectedModeProvider);
     final sensorData = ref.watch(sensorDataProvider).valueOrNull;
     final gpsData = ref.watch(gpsDataProvider).valueOrNull;
 
     final hr = sensorData?.heartRate ?? 0;
     final steps = sensorData?.stepCount ?? 0;
     final jumps = sensorData?.jumpCount ?? 0;
-    
+
     final pitch = sensorData?.pitch ?? 0.0;
     final leanAngle = (pitch.abs() > 90 ? 180 - pitch.abs() : pitch.abs()).toStringAsFixed(1);
 
@@ -34,9 +38,16 @@ class DashboardScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Center(
-                child: Text(
-                  '${activeWorkout.mode.icon} ${activeWorkout.mode.label.toUpperCase()}',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppTheme.primary),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(activeWorkout.mode.icon, color: AppTheme.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      activeWorkout.mode.label.toUpperCase(),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppTheme.primary),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -48,93 +59,247 @@ class DashboardScreen extends ConsumerWidget {
           Expanded(
             child: activeWorkout.isActive
                 ? _buildActiveWorkout(
-                    context,
-                    ref,
-                    activeWorkout,
-                    hr,
-                    steps,
-                    jumps,
-                    speed,
-                    distance,
-                    pitch,
-                    leanAngle,
+                    context, ref, activeWorkout,
+                    hr, steps, jumps, speed, distance, pitch, leanAngle,
                     gpsData?.fixValid ?? false,
                     gpsData?.latitude ?? 0.0,
                     gpsData?.longitude ?? 0.0,
                   )
-                : _buildModeSelector(context, ref),
+                : _buildIdleDashboard(context, ref, selectedMode, gpsData),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeSelector(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'SELECT ACTIVITY',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 32),
-            _ModeButton(
-              mode: SportMode.running,
-              onTap: () => _start(ref, SportMode.running),
-            ),
-            const SizedBox(height: 16),
-            _ModeButton(
-              mode: SportMode.cycling,
-              onTap: () => _start(ref, SportMode.cycling),
-            ),
-            const SizedBox(height: 16),
-            _ModeButton(
-              mode: SportMode.jumpRope,
-              onTap: () => _start(ref, SportMode.jumpRope),
-            ),
-            const SizedBox(height: 16),
-            _ModeButton(
-              mode: SportMode.pushup,
-              onTap: () => _start(ref, SportMode.pushup),
-            ),
-            const SizedBox(height: 16),
-            _ModeButton(
-              mode: SportMode.squat,
-              onTap: () => _start(ref, SportMode.squat),
-            ),
-            const SizedBox(height: 16),
-            _ModeButton(
-              mode: SportMode.plank,
-              onTap: () => _start(ref, SportMode.plank),
-            ),
-          ],
+  // ═══════════════════════════════════════════════
+  //  IDLE STATE — Preview + Activity Picker + START
+  // ═══════════════════════════════════════════════
+  Widget _buildIdleDashboard(BuildContext context, WidgetRef ref, SportMode selectedMode, dynamic gpsData) {
+    final gpsFix = gpsData?.fixValid ?? false;
+    final lat = gpsData?.latitude ?? 0.0;
+    final lng = gpsData?.longitude ?? 0.0;
+
+    return Column(
+      children: [
+        // ── Preview area based on selected mode ──
+        Expanded(
+          child: selectedMode.isOutdoor
+              ? _buildMapPreview(gpsFix, lat, lng)
+              : _buildIndoorPreview(context, selectedMode),
         ),
+
+        // ── Activity Selector Chip ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+          child: InkWell(
+            onTap: () => _showModePicker(context, ref),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.surfaceLight),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(selectedMode.icon, color: AppTheme.primary, size: 24),
+                  const SizedBox(width: 12),
+                  Text(
+                    selectedMode.label.toUpperCase(),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppTheme.textPrimary,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.keyboard_arrow_down, color: AppTheme.textSecondary),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // ── START button ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 64,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+              ),
+              onPressed: () {
+                final mode = ref.read(selectedModeProvider);
+                ref.read(bleServiceProvider).sendCommand(mode, 180);
+                ref.read(activeWorkoutProvider.notifier).startWorkout(mode);
+              },
+              child: Text(
+                'START',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  letterSpacing: 4.0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMapPreview(bool gpsFix, double lat, double lng) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: OsmLiveMap(
+        routePoints: const [],
+        currentLat: lat,
+        currentLng: lng,
+        hasFix: gpsFix,
       ),
     );
   }
 
-  void _start(WidgetRef ref, SportMode mode) {
-    ref.read(bleServiceProvider).sendCommand(mode, 180);
-    ref.read(activeWorkoutProvider.notifier).startWorkout(mode);
+  Widget _buildIndoorPreview(BuildContext context, SportMode mode) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            mode.icon,
+            size: 100,
+            color: AppTheme.primary.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            mode.label.toUpperCase(),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: AppTheme.textMuted,
+              letterSpacing: 2.0,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'TAP START TO BEGIN',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: AppTheme.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
+  // ═══════════════════════════════════════════════
+  //  BOTTOM SHEET — Mode Picker
+  // ═══════════════════════════════════════════════
+  void _showModePicker(BuildContext context, WidgetRef ref) {
+    final currentMode = ref.read(selectedModeProvider);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'SELECT ACTIVITY',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── Outdoor Section ──
+              _SectionLabel(label: 'OUTDOOR'),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.running,
+                isSelected: currentMode == SportMode.running,
+                onTap: () => _selectMode(ref, ctx, SportMode.running),
+              ),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.cycling,
+                isSelected: currentMode == SportMode.cycling,
+                onTap: () => _selectMode(ref, ctx, SportMode.cycling),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── Indoor Section ──
+              _SectionLabel(label: 'INDOOR'),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.jumpRope,
+                isSelected: currentMode == SportMode.jumpRope,
+                onTap: () => _selectMode(ref, ctx, SportMode.jumpRope),
+              ),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.pushup,
+                isSelected: currentMode == SportMode.pushup,
+                onTap: () => _selectMode(ref, ctx, SportMode.pushup),
+              ),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.squat,
+                isSelected: currentMode == SportMode.squat,
+                onTap: () => _selectMode(ref, ctx, SportMode.squat),
+              ),
+              const SizedBox(height: 8),
+              _ModeSheetItem(
+                mode: SportMode.plank,
+                isSelected: currentMode == SportMode.plank,
+                onTap: () => _selectMode(ref, ctx, SportMode.plank),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _selectMode(WidgetRef ref, BuildContext ctx, SportMode mode) {
+    ref.read(selectedModeProvider.notifier).state = mode;
+    Navigator.pop(ctx);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  ACTIVE WORKOUT — Live Stats
+  // ═══════════════════════════════════════════════
   Widget _buildActiveWorkout(
     BuildContext context,
     WidgetRef ref,
     ActiveWorkoutState state,
-    int hr,
-    int steps,
-    int jumps,
-    String speed,
-    String distance,
-    double pitch,
-    String leanAngle,
-    bool gpsFix,
-    double lat,
-    double lng,
+    int hr, int steps, int jumps,
+    String speed, String distance,
+    double pitch, String leanAngle,
+    bool gpsFix, double lat, double lng,
   ) {
     final h = state.durationSeconds ~/ 3600;
     final m = (state.durationSeconds % 3600) ~/ 60;
@@ -148,7 +313,6 @@ class DashboardScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Primary row (Time & HR usually)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -166,24 +330,16 @@ class DashboardScreen extends ConsumerWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _PrimaryStat(label: 'DISTANCE', value: distance, unit: 'km'),
-                    ),
-                    Expanded(
-                      child: _PrimaryStat(label: 'PACE', value: speed, unit: 'km/h'),
-                    ),
+                    Expanded(child: _PrimaryStat(label: 'DISTANCE', value: distance, unit: 'km')),
+                    Expanded(child: _PrimaryStat(label: 'PACE', value: speed, unit: 'km/h')),
                   ],
                 ),
               if (state.mode == SportMode.jumpRope || state.mode == SportMode.pushup || state.mode == SportMode.squat)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _PrimaryStat(label: 'REPS', value: jumps.toString(), unit: 'reps'),
-                    ),
-                    Expanded(
-                      child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal'),
-                    ),
+                    Expanded(child: _PrimaryStat(label: 'REPS', value: jumps.toString(), unit: 'reps')),
+                    Expanded(child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal')),
                   ],
                 ),
               if (state.mode == SportMode.running || state.mode == SportMode.jumpRope)
@@ -199,8 +355,8 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                     child: Center(
                       child: Text(
-                        pitch.abs() > 20.0 
-                            ? 'POSTUR: MEMBUNGKUK (${pitch.abs().toStringAsFixed(1)}°)' 
+                        pitch.abs() > 20.0
+                            ? 'POSTUR: MEMBUNGKUK (${pitch.abs().toStringAsFixed(1)}°)'
                             : 'POSTUR: IDEAL (${pitch.abs().toStringAsFixed(1)}°)',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: pitch.abs() > 20.0 ? AppTheme.danger : AppTheme.success,
@@ -236,12 +392,8 @@ class DashboardScreen extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 16.0),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: _PrimaryStat(label: 'LEAN ANGLE', value: leanAngle, unit: '°'),
-                      ),
-                      Expanded(
-                        child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal'),
-                      ),
+                      Expanded(child: _PrimaryStat(label: 'LEAN ANGLE', value: leanAngle, unit: '°')),
+                      Expanded(child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal')),
                     ],
                   ),
                 ),
@@ -250,7 +402,7 @@ class DashboardScreen extends ConsumerWidget {
         ),
 
         // ── Map (Only for GPS modes) ──
-        if (state.mode == SportMode.running || state.mode == SportMode.cycling)
+        if (state.mode.isOutdoor)
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -263,9 +415,9 @@ class DashboardScreen extends ConsumerWidget {
             ),
           )
         else
-           const Spacer(),
+          const Spacer(),
 
-        // ── Bottom Action ──
+        // ── FINISH Button ──
         Padding(
           padding: const EdgeInsets.all(24.0),
           child: SizedBox(
@@ -273,19 +425,26 @@ class DashboardScreen extends ConsumerWidget {
             height: 64,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: AppTheme.danger,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
               ),
               onPressed: () {
                 ref.read(bleServiceProvider).sendCommand(SportMode.idle, 180);
                 ref.read(activeWorkoutProvider.notifier).stopWorkoutAndSave();
               },
-              child: Text(
-                'FINISH WORKOUT',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 2.0,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.stop_circle_outlined, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    'FINISH',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -295,33 +454,75 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _ModeButton extends StatelessWidget {
+// ═══════════════════════════════════════════════
+//  PRIVATE WIDGETS
+// ═══════════════════════════════════════════════
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          letterSpacing: 2.0,
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeSheetItem extends StatelessWidget {
   final SportMode mode;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const _ModeButton({required this.mode, required this.onTap});
+  const _ModeSheetItem({
+    required this.mode,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: AppTheme.surface,
+          color: isSelected ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.background,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.surfaceLight),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : AppTheme.surfaceLight,
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Row(
           children: [
-            Text(mode.icon, style: const TextStyle(fontSize: 32)),
-            const SizedBox(width: 24),
-            Text(
-              mode.label.toUpperCase(),
-              style: Theme.of(context).textTheme.headlineMedium,
+            Icon(
+              mode.icon,
+              color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+              size: 28,
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                mode.label.toUpperCase(),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: AppTheme.primary, size: 24),
           ],
         ),
       ),
@@ -336,8 +537,8 @@ class _PrimaryStat extends StatelessWidget {
   final bool isHighlight;
 
   const _PrimaryStat({
-    required this.label, 
-    required this.value, 
+    required this.label,
+    required this.value,
     this.unit,
     this.isHighlight = false,
   });
