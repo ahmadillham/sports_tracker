@@ -52,4 +52,9 @@ void buzzer_update();
  */
 bool buzzer_is_playing();
 
+/**
+ * @brief Get the currently playing pattern.
+ */
+BuzzerPattern buzzer_get_pattern();
+
 #endif // BUZZER_H

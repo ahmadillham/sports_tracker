@@ -53,7 +53,7 @@ static const BeepStep* getPatternSteps(BuzzerPattern pat, bool &repeat) {
         case BUZZ_POWER_ON:      return PAT_POWER_ON;
         case BUZZ_BLE_CONNECTED: return PAT_BLE_CONN;
         case BUZZ_GPS_LOCK:      return PAT_GPS_LOCK;
-        case BUZZ_HR_WARNING:    repeat = true; return PAT_HR_WARN;
+        case BUZZ_HR_WARNING:    repeat = false; return PAT_HR_WARN;
         default:                 return nullptr;
     }
 }
@@ -130,4 +130,8 @@ void buzzer_update() {
 
 bool buzzer_is_playing() {
     return (s_currentPattern != BUZZ_NONE && s_steps != nullptr);
+}
+
+BuzzerPattern buzzer_get_pattern() {
+    return s_currentPattern;
 }

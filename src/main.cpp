@@ -150,7 +150,9 @@ void taskGPS(void *param) {
             xSemaphoreGive(xDataMutex);
         }
 
-        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(GPS_POLL_INTERVAL_MS));
+        // Poll every 100ms (10Hz) to drain UART buffer frequently
+        // and prevent NMEA data loss from higher-priority tasks
+        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(100));
     }
 }
 
