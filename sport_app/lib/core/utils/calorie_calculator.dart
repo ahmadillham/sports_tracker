@@ -1,13 +1,11 @@
 /// Calorie calculator using heart rate based formula.
 /// Reference: Keytel et al. (2005) prediction equation.
+library;
+
+import '../../data/models/user_profile.dart';
 
 class CalorieCalculator {
   CalorieCalculator._();
-
-  // Mock user profile (hardcoded for now)
-  static const double _userWeightKg = 70.0;
-  static const int _userAge = 25;
-  static const bool _isMale = true;
 
   /// Calculate calories burned per minute based on heart rate.
   ///
@@ -16,21 +14,23 @@ class CalorieCalculator {
   ///
   /// Female formula:
   ///   cal/min = (-20.4022 + 0.4472×HR - 0.1263×weight + 0.074×age) / 4.184
-  static double caloriesPerMinute(int heartRate) {
+  static double caloriesPerMinute(int heartRate, {UserProfile? profile}) {
     if (heartRate <= 0) return 0.0;
 
+    final p = profile ?? const UserProfile();
+
     double calPerMin;
-    if (_isMale) {
+    if (p.isMale) {
       calPerMin = (-55.0969 +
               0.6309 * heartRate +
-              0.1988 * _userWeightKg +
-              0.2017 * _userAge) /
+              0.1988 * p.weightKg +
+              0.2017 * p.age) /
           4.184;
     } else {
       calPerMin = (-20.4022 +
               0.4472 * heartRate -
-              0.1263 * _userWeightKg +
-              0.074 * _userAge) /
+              0.1263 * p.weightKg +
+              0.074 * p.age) /
           4.184;
     }
 
@@ -40,8 +40,9 @@ class CalorieCalculator {
   /// Calculate total calories for a given duration.
   /// [heartRate] - average BPM
   /// [durationSeconds] - total workout duration in seconds
-  static double totalCalories(int heartRate, int durationSeconds) {
+  static double totalCalories(int heartRate, int durationSeconds,
+      {UserProfile? profile}) {
     final minutes = durationSeconds / 60.0;
-    return caloriesPerMinute(heartRate) * minutes;
+    return caloriesPerMinute(heartRate, profile: profile) * minutes;
   }
 }

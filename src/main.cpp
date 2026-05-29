@@ -27,9 +27,10 @@ GPSData           g_gpsData     = {0.0, 0.0, 0.0f, 0.0f, 0, 0};
 CommandData       g_commandData = {MODE_IDLE, 180};
 volatile bool     g_bleConnected    = false;
 volatile bool     g_gpsLockAcquired = false;
+volatile unsigned long g_hrMutedUntil = 0;
 
 // Track if GPS lock buzzer has already fired
-static bool s_gpsLockBuzzed = false;
+static volatile bool s_gpsLockBuzzed = false;
 
 // ──────────────────────────────────────────────
 //  Task: Sensor Polling (Core 1, 50 Hz)
@@ -50,8 +51,8 @@ void taskSensor(void *param) {
         IMURawData imuRaw;
         bool imuOk = imu_read(imuRaw);
 
-        // ── Read HR ──
-        uint16_t bpm = hr_update();
+        // ── Read HR (from dedicated HR task) ──
+        uint16_t bpm = hr_get_bpm();
 
         // ── Run algorithms based on sport mode ──
         SportMode currentMode;
@@ -93,9 +94,38 @@ void taskSensor(void *param) {
         }
 
         // ── HR Warning Check ──
+        static unsigned long s_hrWarnStartTime = 0;
+        static bool s_hrWarnActive = false;
+        
         if (bpm > 0 && currentMaxHR > 0 && bpm > currentMaxHR) {
-            if (!buzzer_is_playing()) {
-                buzzer_trigger(BUZZ_HR_WARNING);
+            unsigned long currentMs = millis();
+            if (currentMs >= g_hrMutedUntil) {
+                if (!s_hrWarnActive) {
+                    s_hrWarnActive = true;
+                    s_hrWarnStartTime = currentMs;
+                }
+                
+                unsigned long elapsed = currentMs - s_hrWarnStartTime;
+                if (elapsed < HR_WARN_ACTIVE_MS) {
+                    // Active buzzing phase
+                    if (!buzzer_is_playing()) {
+                        buzzer_trigger(BUZZ_HR_WARNING);
+                    }
+                } else if (elapsed < HR_WARN_ACTIVE_MS + HR_WARN_COOLDOWN_MS) {
+                    // Cooldown phase
+                    if (buzzer_is_playing() && buzzer_get_pattern() == BUZZ_HR_WARNING) {
+                        buzzer_stop();
+                    }
+                } else {
+                    // Reset cycle
+                    s_hrWarnStartTime = currentMs;
+                }
+            }
+        } else {
+            // HR is normal, reset state
+            s_hrWarnActive = false;
+            if (buzzer_is_playing() && buzzer_get_pattern() == BUZZ_HR_WARNING) {
+                buzzer_stop();
             }
         }
 
@@ -106,6 +136,7 @@ void taskSensor(void *param) {
             
             // Reuse jumpCount for reps or plank posture flag
             if (currentMode == MODE_PLANK) {
+                // Use cached posture from algo_update_posture above
                 g_sensorData.jumpCount = algo_check_plank_posture(posture.pitch);
             } else {
                 g_sensorData.jumpCount = algo_get_reps();
@@ -172,6 +203,21 @@ void taskBLE(void *param) {
 }
 
 // ──────────────────────────────────────────────
+//  Task: HR Sampling (Core 1, 200 Hz)
+//  Dedicated task for AD8232 analog sampling at
+//  the correct rate for R-wave peak detection.
+// ──────────────────────────────────────────────
+void taskHR(void *param) {
+    (void)param;
+    TickType_t xLastWake = xTaskGetTickCount();
+
+    for (;;) {
+        hr_update();
+        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(HR_SAMPLE_RATE_MS));
+    }
+}
+
+// ──────────────────────────────────────────────
 //  Task: Buzzer State Machine (Core 1, 100 Hz)
 // ──────────────────────────────────────────────
 void taskBuzzer(void *param) {
@@ -183,6 +229,9 @@ void taskBuzzer(void *param) {
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(BUZZER_TICK_INTERVAL_MS));
     }
 }
+
+// Guard against test builds (test files provide their own setup/loop)
+#ifndef UNIT_TEST
 
 // ──────────────────────────────────────────────
 //  Arduino Setup
@@ -237,10 +286,17 @@ void setup() {
         1  // Core 1
     );
 
-    // Core 1: Buzzer (priority 3 — highest, for timing accuracy)
+    // Core 1: HR sampling at 200 Hz (priority 3 — highest, timing-critical)
+    xTaskCreatePinnedToCore(
+        taskHR, "TaskHR",
+        STACK_SIZE_HR, nullptr, 3, nullptr,
+        1  // Core 1
+    );
+
+    // Core 1: Buzzer (priority 1 — low, non-timing-critical)
     xTaskCreatePinnedToCore(
         taskBuzzer, "TaskBuzzer",
-        STACK_SIZE_BUZZER, nullptr, 3, nullptr,
+        STACK_SIZE_BUZZER, nullptr, 1, nullptr,
         1  // Core 1
     );
 
@@ -253,3 +309,5 @@ void setup() {
 void loop() {
     vTaskDelay(pdMS_TO_TICKS(1000));
 }
+
+#endif // UNIT_TEST

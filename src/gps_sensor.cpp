@@ -38,7 +38,8 @@ bool gps_update(GPSOutput &output) {
 
     // Populate output regardless of whether we got a new sentence
     output.satellites = (uint8_t)gps.satellites.value();
-    output.fixValid   = gps.location.isValid() && gps.location.isUpdated();
+    // Note: Only use isValid() — isUpdated() resets after each read and causes flicker
+    output.fixValid   = gps.location.isValid();
 
     if (gps.location.isValid()) {
         output.latitude  = gps.location.lat();
@@ -55,8 +56,10 @@ bool gps_update(GPSOutput &output) {
                 output.latitude, output.longitude
             ) / 1000.0; // distanceBetween returns meters
 
-            // Only accumulate if segment is plausible (< 1km in one update, > 2m)
-            if (segmentKm > 0.002 && segmentKm < 1.0) {
+            // Only accumulate if segment is plausible (<1km in one update, >2m)
+            // and GPS speed indicates actual movement (>1 km/h) to filter drift
+            bool isMoving = gps.speed.isValid() && gps.speed.kmph() > 1.0;
+            if (segmentKm > 0.002 && segmentKm < 1.0 && isMoving) {
                 s_totalDistanceKm += segmentKm;
             }
         }

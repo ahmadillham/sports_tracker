@@ -18,6 +18,12 @@ class HistoryDetailScreen extends StatefulWidget {
 class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
   final MapController _mapController = MapController();
 
+  String _getTimeOfDay(int hour) {
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<LatLng> polylinePoints = widget.session.routePoints
@@ -47,7 +53,7 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Morning ${widget.session.mode.label}',
+                        '${_getTimeOfDay(widget.session.startTime.hour)} ${widget.session.mode.label}',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       Text(

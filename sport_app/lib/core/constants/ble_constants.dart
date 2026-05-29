@@ -1,5 +1,6 @@
 /// BLE Service and Characteristic UUIDs matching the ESP32 firmware.
 /// Sport mode enum mirroring the firmware's SportMode.
+library;
 
 import 'package:flutter/material.dart';
 
@@ -28,18 +29,28 @@ class BleConstants {
 
 /// Sport modes matching ESP32 firmware enum.
 enum SportMode {
-  idle(0x00, 'Idle', Icons.pause_circle_outline),
-  running(0x01, 'Running', Icons.directions_run),
-  cycling(0x02, 'Cycling', Icons.directions_bike),
-  jumpRope(0x03, 'Jump Rope', Icons.fitness_center),
-  pushup(0x04, 'Push-up', Icons.accessibility_new),
-  squat(0x05, 'Squat', Icons.airline_seat_legroom_extra),
-  plank(0x06, 'Plank', Icons.straighten);
+  idle(0x00, 'Idle', Icons.pause_circle_outline, 'No active tracking'),
+  running(0x01, 'Running', Icons.directions_run, 'Distance · Pace · Steps · Posture'),
+  cycling(0x02, 'Cycling', Icons.directions_bike, 'Distance · Speed · Lean Angle'),
+  jumpRope(0x03, 'Jump Rope', Icons.fitness_center, 'Reps · Calories · Posture',
+      customIconAsset: 'assets/icons/skipping-rope.png'),
+  pushup(0x04, 'Push-up', Icons.accessibility_new, 'Reps · Calories',
+      customIconAsset: 'assets/icons/push_up.png'),
+  squat(0x05, 'Squat', Icons.sports_martial_arts, 'Reps · Calories',
+      customIconAsset: 'assets/icons/squat.png'),
+  plank(0x06, 'Plank', Icons.self_improvement, 'Duration · Posture Feedback',
+      customIconAsset: 'assets/icons/plank.png');
 
-  const SportMode(this.code, this.label, this.icon);
+  const SportMode(this.code, this.label, this.icon, this.subtitle,
+      {this.customIconAsset});
   final int code;
   final String label;
   final IconData icon;
+  final String subtitle;
+  final String? customIconAsset;
+
+  /// Whether this mode has a custom PNG icon asset.
+  bool get hasCustomIcon => customIconAsset != null;
 
   /// Whether this mode is a GPS/outdoor activity
   bool get isOutdoor => this == running || this == cycling;

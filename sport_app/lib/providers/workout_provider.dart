@@ -4,16 +4,41 @@ import 'package:uuid/uuid.dart';
 import '../core/utils/calorie_calculator.dart';
 import '../core/constants/ble_constants.dart';
 import '../data/models/models.dart';
+import '../data/models/user_profile.dart';
 import '../data/repositories/workout_repository.dart';
 import 'ble_provider.dart';
 
-// Provides the WorkoutRepository instance (needs to be initialized in main)
+// ── Repository & Profile Providers ──
+
 final workoutRepositoryProvider = Provider<WorkoutRepository>((ref) {
   throw UnimplementedError('Initialize in main.dart');
 });
 
-// Provides the history list, automatically reloading when a workout is saved
-final workoutHistoryProvider = StateNotifierProvider<WorkoutHistoryNotifier, List<WorkoutSession>>((ref) {
+final userProfileRepoProvider = Provider<UserProfileRepository>((ref) {
+  throw UnimplementedError('Initialize in main.dart');
+});
+
+final userProfileProvider =
+    StateNotifierProvider<UserProfileNotifier, UserProfile>((ref) {
+  final repo = ref.watch(userProfileRepoProvider);
+  return UserProfileNotifier(repo);
+});
+
+class UserProfileNotifier extends StateNotifier<UserProfile> {
+  final UserProfileRepository _repo;
+
+  UserProfileNotifier(this._repo) : super(_repo.getProfile());
+
+  Future<void> update(UserProfile profile) async {
+    await _repo.saveProfile(profile);
+    state = profile;
+  }
+}
+
+// ── Workout History ──
+
+final workoutHistoryProvider =
+    StateNotifierProvider<WorkoutHistoryNotifier, List<WorkoutSession>>((ref) {
   final repo = ref.watch(workoutRepositoryProvider);
   return WorkoutHistoryNotifier(repo);
 });
@@ -36,140 +61,210 @@ class WorkoutHistoryNotifier extends StateNotifier<List<WorkoutSession>> {
 }
 
 // ── Active Workout State ──
+
+enum WorkoutStatus { idle, running, paused, finished }
+
 class ActiveWorkoutState {
-  final bool isActive;
+  final WorkoutStatus status;
   final SportMode mode;
   final int durationSeconds;
   final double caloriesBurned;
   final List<List<double>> routePoints;
-  final List<int> _hrHistory; // Internal for avg calculation
+  final int hrSum;
+  final int hrCount;
+  final int hrMax;
+  // Snapshot values for summary screen
+  final int lastSteps;
+  final int lastJumps;
+  final double lastDistance;
 
   const ActiveWorkoutState({
-    this.isActive = false,
+    this.status = WorkoutStatus.idle,
     this.mode = SportMode.idle,
     this.durationSeconds = 0,
     this.caloriesBurned = 0.0,
     this.routePoints = const [],
-    List<int> hrHistory = const [],
-  }) : _hrHistory = hrHistory;
+    this.hrSum = 0,
+    this.hrCount = 0,
+    this.hrMax = 0,
+    this.lastSteps = 0,
+    this.lastJumps = 0,
+    this.lastDistance = 0.0,
+  });
+
+  bool get isActive => status == WorkoutStatus.running || status == WorkoutStatus.paused;
+  bool get isPaused => status == WorkoutStatus.paused;
+  bool get isFinished => status == WorkoutStatus.finished;
+  int get avgHeartRate => hrCount > 0 ? (hrSum / hrCount).round() : 0;
+  int get maxHeartRate => hrMax;
 
   ActiveWorkoutState copyWith({
-    bool? isActive,
+    WorkoutStatus? status,
     SportMode? mode,
     int? durationSeconds,
     double? caloriesBurned,
     List<List<double>>? routePoints,
-    List<int>? hrHistory,
+    int? hrSum,
+    int? hrCount,
+    int? hrMax,
+    int? lastSteps,
+    int? lastJumps,
+    double? lastDistance,
   }) {
     return ActiveWorkoutState(
-      isActive: isActive ?? this.isActive,
+      status: status ?? this.status,
       mode: mode ?? this.mode,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       caloriesBurned: caloriesBurned ?? this.caloriesBurned,
       routePoints: routePoints ?? this.routePoints,
-      hrHistory: hrHistory ?? _hrHistory,
+      hrSum: hrSum ?? this.hrSum,
+      hrCount: hrCount ?? this.hrCount,
+      hrMax: hrMax ?? this.hrMax,
+      lastSteps: lastSteps ?? this.lastSteps,
+      lastJumps: lastJumps ?? this.lastJumps,
+      lastDistance: lastDistance ?? this.lastDistance,
     );
   }
 }
 
-// Manages the active workout session (timer, calories, route accumulation)
-final activeWorkoutProvider = StateNotifierProvider<ActiveWorkoutNotifier, ActiveWorkoutState>((ref) {
+// ── Active Workout Notifier ──
+
+final activeWorkoutProvider =
+    StateNotifierProvider<ActiveWorkoutNotifier, ActiveWorkoutState>((ref) {
   return ActiveWorkoutNotifier(ref);
 });
 
 class ActiveWorkoutNotifier extends StateNotifier<ActiveWorkoutState> {
   final Ref _ref;
   Timer? _timer;
+  final List<List<double>> _routePoints = [];
 
   ActiveWorkoutNotifier(this._ref) : super(const ActiveWorkoutState());
 
   void startWorkout(SportMode mode) {
-    state = ActiveWorkoutState(isActive: true, mode: mode);
+    _routePoints.clear();
+    state = ActiveWorkoutState(status: WorkoutStatus.running, mode: mode);
     _timer = Timer.periodic(const Duration(seconds: 1), _onTick);
   }
 
+  void pauseWorkout() {
+    if (state.status != WorkoutStatus.running) return;
+    _timer?.cancel();
+    state = state.copyWith(status: WorkoutStatus.paused);
+  }
+
+  void resumeWorkout() {
+    if (state.status != WorkoutStatus.paused) return;
+    state = state.copyWith(status: WorkoutStatus.running);
+    _timer = Timer.periodic(const Duration(seconds: 1), _onTick);
+  }
+
+  void muteHrWarning() {
+    final profile = _ref.read(userProfileProvider);
+    _ref.read(bleServiceProvider).sendCommand(
+          state.mode,
+          profile.maxHR,
+          muteWarning: true,
+        );
+  }
+
   void _onTick(Timer timer) {
-    if (!state.isActive) return;
+    if (state.status != WorkoutStatus.running) return;
 
-    // Get latest sensor data for calorie calc
-    final sensorData = _ref.read(sensorDataProvider).valueOrNull ?? const SensorData();
+    final sensorData =
+        _ref.read(sensorDataProvider).valueOrNull ?? const SensorData();
     final hr = sensorData.heartRate;
+    final profile = _ref.read(userProfileProvider);
 
-    // Accumulate route points if we have a valid GPS fix
+    // GPS route accumulation
     final gpsData = _ref.read(gpsDataProvider).valueOrNull;
-    List<List<double>> newRoute = List.from(state.routePoints);
     if (gpsData != null && gpsData.fixValid && gpsData.latitude != 0.0) {
-      // Only add point if it's sufficiently different from the last one to save memory
-      if (newRoute.isEmpty ||
-          _distanceSquared(newRoute.last[0], newRoute.last[1], gpsData.latitude, gpsData.longitude) > 0.0000001) {
-        newRoute.add([gpsData.latitude, gpsData.longitude]);
+      if (_routePoints.isEmpty ||
+          _distSq(_routePoints.last[0], _routePoints.last[1],
+                  gpsData.latitude, gpsData.longitude) >
+              0.0000001) {
+        _routePoints.add([gpsData.latitude, gpsData.longitude]);
       }
     }
 
-    // Accumulate HR history
-    List<int> newHrHistory = List.from(state._hrHistory);
-    if (hr > 0) newHrHistory.add(hr);
+    // HR stats
+    int newHrSum = state.hrSum;
+    int newHrCount = state.hrCount;
+    int newHrMax = state.hrMax;
+    if (hr > 0) {
+      newHrSum += hr;
+      newHrCount += 1;
+      if (hr > newHrMax) newHrMax = hr;
+    }
 
-    // Calculate incremental calories (1 second worth)
-    final incrementalCals = CalorieCalculator.caloriesPerMinute(hr) / 60.0;
+    // Incremental calories
+    final incrementalCals =
+        CalorieCalculator.caloriesPerMinute(hr, profile: profile) / 60.0;
 
     state = state.copyWith(
       durationSeconds: state.durationSeconds + 1,
       caloriesBurned: state.caloriesBurned + incrementalCals,
-      routePoints: newRoute,
-      hrHistory: newHrHistory,
+      routePoints: List.unmodifiable(_routePoints),
+      hrSum: newHrSum,
+      hrCount: newHrCount,
+      hrMax: newHrMax,
     );
   }
 
-  double _distanceSquared(double lat1, double lon1, double lat2, double lon2) {
+  double _distSq(double lat1, double lon1, double lat2, double lon2) {
     return (lat1 - lat2) * (lat1 - lat2) + (lon1 - lon2) * (lon1 - lon2);
   }
 
-  Future<void> stopWorkoutAndSave() async {
-    if (!state.isActive || state.durationSeconds < 10) {
-      // Too short to save
-      reset();
-      return;
-    }
-
+  /// Stop workout and transition to "finished" state for the summary screen.
+  /// Returns the WorkoutSession for display, but does NOT save yet.
+  WorkoutSession? finishWorkout() {
     _timer?.cancel();
 
-    // Gather final stats
-    final sensorData = _ref.read(sensorDataProvider).valueOrNull ?? const SensorData();
-    final gpsData = _ref.read(gpsDataProvider).valueOrNull ?? const GpsData();
-
-    int avgHr = 0;
-    int maxHr = 0;
-    if (state._hrHistory.isNotEmpty) {
-      avgHr = (state._hrHistory.reduce((a, b) => a + b) / state._hrHistory.length).round();
-      maxHr = state._hrHistory.reduce((a, b) => a > b ? a : b);
+    if (state.durationSeconds < 5) {
+      reset();
+      return null;
     }
+
+    final sensorData =
+        _ref.read(sensorDataProvider).valueOrNull ?? const SensorData();
+    final gpsData =
+        _ref.read(gpsDataProvider).valueOrNull ?? const GpsData();
 
     final session = WorkoutSession(
       id: const Uuid().v4(),
       mode: state.mode,
-      startTime: DateTime.now().subtract(Duration(seconds: state.durationSeconds)),
+      startTime: DateTime.now()
+          .subtract(Duration(seconds: state.durationSeconds)),
       durationSeconds: state.durationSeconds,
       calories: state.caloriesBurned,
-      distance: gpsData.distance, // From ESP32 cumulative distance
+      distance: gpsData.distance,
       steps: sensorData.stepCount,
       jumps: sensorData.jumpCount,
-      avgHeartRate: avgHr,
-      maxHeartRate: maxHr,
-      routePoints: state.routePoints,
+      avgHeartRate: state.avgHeartRate,
+      maxHeartRate: state.maxHeartRate,
+      routePoints: List.from(_routePoints),
     );
 
-    // Save to Hive
+    state = state.copyWith(
+      status: WorkoutStatus.finished,
+      lastSteps: sensorData.stepCount,
+      lastJumps: sensorData.jumpCount,
+      lastDistance: gpsData.distance,
+    );
+
+    return session;
+  }
+
+  /// Save the workout and reset state.
+  Future<void> saveAndReset(WorkoutSession session) async {
     await _ref.read(workoutRepositoryProvider).saveWorkout(session);
-
-    // Refresh history
     _ref.read(workoutHistoryProvider.notifier).loadWorkouts();
-
     reset();
   }
 
   void reset() {
     _timer?.cancel();
+    _routePoints.clear();
     state = const ActiveWorkoutState();
   }
 

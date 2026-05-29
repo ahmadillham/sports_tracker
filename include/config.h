@@ -111,12 +111,12 @@ extern GPSData           g_gpsData;
 extern CommandData       g_commandData;
 extern volatile bool     g_bleConnected;
 extern volatile bool     g_gpsLockAcquired;
+extern volatile unsigned long g_hrMutedUntil;
 
 // ──────────────────────────────────────────────
 //  Timing Constants (milliseconds)
 // ──────────────────────────────────────────────
 #define SENSOR_POLL_INTERVAL_MS     20    // 50 Hz for IMU + HR
-#define GPS_POLL_INTERVAL_MS        1000  // 1 Hz for GPS
 #define BLE_NOTIFY_INTERVAL_MS      500   // 2 Hz BLE notifications
 #define BUZZER_TICK_INTERVAL_MS     10    // 100 Hz buzzer state machine
 
@@ -129,12 +129,12 @@ extern volatile bool     g_gpsLockAcquired;
 #define STEP_DEBOUNCE_MS            300     // Minimum ms between steps
 
 // Jump detection
-#define JUMP_THRESHOLD              1.80f   // G-force threshold for jump peak
-#define JUMP_DEBOUNCE_MS            250     // Minimum ms between jumps
+#define JUMP_THRESHOLD              1.90f   // G-force threshold for jump peak
+#define JUMP_DEBOUNCE_MS            450     // Minimum ms between jumps
 
 // Push-up detection
 #define PUSHUP_THRESHOLD            1.25f   // G-force threshold for push-up peak
-#define PUSHUP_DEBOUNCE_MS          600     // Minimum ms between push-ups
+#define PUSHUP_DEBOUNCE_MS          1000    // Minimum ms between push-ups
 
 // Squat detection
 #define SQUAT_THRESHOLD             1.15f   // G-force threshold for squat peak
@@ -148,6 +148,10 @@ extern volatile bool     g_gpsLockAcquired;
 #define HR_THRESHOLD                2200    // ADC threshold for R-wave peak
 #define HR_MIN_IBI_MS               300     // Min inter-beat interval (200 BPM max)
 #define HR_MAX_IBI_MS               1500    // Max inter-beat interval (40 BPM min)
+#define HR_TIMEOUT_MS               3000    // No peak for 3s = signal lost
+#define HR_WARN_ACTIVE_MS           30000   // Warning buzzes for 30s
+#define HR_WARN_COOLDOWN_MS         30000   // Warning rests for 30s
+#define HR_WARN_MUTE_DURATION_MS    300000  // Muted via app for 5 mins
 
 // Posture complementary filter
 #define COMPLEMENTARY_ALPHA         0.96f
@@ -155,6 +159,7 @@ extern volatile bool     g_gpsLockAcquired;
 // FreeRTOS Task Stack Sizes
 #define STACK_SIZE_BLE              4096
 #define STACK_SIZE_SENSOR           4096
+#define STACK_SIZE_HR               2048
 #define STACK_SIZE_GPS              2048
 #define STACK_SIZE_BUZZER           1024
 

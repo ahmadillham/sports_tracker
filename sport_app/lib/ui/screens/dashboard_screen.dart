@@ -6,6 +6,15 @@ import '../../providers/workout_provider.dart';
 import '../../providers/ble_provider.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/osm_live_map.dart';
+import '../widgets/hr_ring_widget.dart';
+import '../widgets/glassmorphic_card.dart';
+import '../widgets/hr_zone_bar.dart';
+import '../widgets/slide_to_action.dart';
+import 'history_screen.dart';
+import 'profile_screen.dart';
+import 'workout_summary_screen.dart';
+import 'hr_monitor_screen.dart';
+import 'posture_screen.dart';
 
 /// A Riverpod provider to track the currently *selected* mode before starting.
 final selectedModeProvider = StateProvider<SportMode>((ref) => SportMode.running);
@@ -19,39 +28,82 @@ class DashboardScreen extends ConsumerWidget {
     final selectedMode = ref.watch(selectedModeProvider);
     final sensorData = ref.watch(sensorDataProvider).valueOrNull;
     final gpsData = ref.watch(gpsDataProvider).valueOrNull;
+    final profile = ref.watch(userProfileProvider);
 
     final hr = sensorData?.heartRate ?? 0;
     final steps = sensorData?.stepCount ?? 0;
     final jumps = sensorData?.jumpCount ?? 0;
-
     final pitch = sensorData?.pitch ?? 0.0;
-    final leanAngle = (pitch.abs() > 90 ? 180 - pitch.abs() : pitch.abs()).toStringAsFixed(1);
-
     final speed = gpsData?.speed.toStringAsFixed(1) ?? '0.0';
     final distance = gpsData?.distance.toStringAsFixed(2) ?? '0.00';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('SPORT TRACKER'),
-        actions: [
-          if (activeWorkout.isActive)
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(activeWorkout.mode.icon, color: AppTheme.primary, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      activeWorkout.mode.label.toUpperCase(),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppTheme.primary),
-                    ),
-                  ],
+      ),
+      drawer: Drawer(
+        backgroundColor: AppTheme.surface,
+        child: Column(
+          children: [
+            const SizedBox(height: 64),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.directions_run, color: AppTheme.primary),
+              ),
+              title: Text(
+                'SPORT TRACKER', 
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold, 
+                  letterSpacing: 1.5,
+                  color: AppTheme.primary,
                 ),
               ),
             ),
-        ],
+            const Divider(color: AppTheme.surfaceLight, height: 32),
+            ListTile(
+              leading: const Icon(Icons.dashboard, color: AppTheme.textSecondary),
+              title: const Text('Dashboard'),
+              onTap: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite, color: AppTheme.danger),
+              title: const Text('Heart Rate Monitor'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HrMonitorScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.balance, color: AppTheme.success),
+              title: const Text('Posture Correction'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PostureScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.history, color: AppTheme.textSecondary),
+              title: const Text('History'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline, color: AppTheme.textSecondary),
+              title: const Text('Profile'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
+              },
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -60,10 +112,11 @@ class DashboardScreen extends ConsumerWidget {
             child: activeWorkout.isActive
                 ? _buildActiveWorkout(
                     context, ref, activeWorkout,
-                    hr, steps, jumps, speed, distance, pitch, leanAngle,
+                    hr, steps, jumps, speed, distance, pitch,
                     gpsData?.fixValid ?? false,
                     gpsData?.latitude ?? 0.0,
                     gpsData?.longitude ?? 0.0,
+                    profile.maxHR,
                   )
                 : _buildIdleDashboard(context, ref, selectedMode, gpsData),
           ),
@@ -75,7 +128,8 @@ class DashboardScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════
   //  IDLE STATE — Preview + Activity Picker + START
   // ═══════════════════════════════════════════════
-  Widget _buildIdleDashboard(BuildContext context, WidgetRef ref, SportMode selectedMode, dynamic gpsData) {
+  Widget _buildIdleDashboard(
+      BuildContext context, WidgetRef ref, SportMode selectedMode, dynamic gpsData) {
     final gpsFix = gpsData?.fixValid ?? false;
     final lat = gpsData?.latitude ?? 0.0;
     final lng = gpsData?.longitude ?? 0.0;
@@ -111,9 +165,9 @@ class DashboardScreen extends ConsumerWidget {
                   Text(
                     selectedMode.label.toUpperCase(),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppTheme.textPrimary,
-                      letterSpacing: 1.5,
-                    ),
+                          color: AppTheme.textPrimary,
+                          letterSpacing: 1.5,
+                        ),
                   ),
                   const SizedBox(width: 8),
                   const Icon(Icons.keyboard_arrow_down, color: AppTheme.textSecondary),
@@ -123,30 +177,16 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
 
-        // ── START button ──
+        // ── START button with breathing animation ──
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: SizedBox(
-            width: double.infinity,
-            height: 64,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-              ),
-              onPressed: () {
-                final mode = ref.read(selectedModeProvider);
-                ref.read(bleServiceProvider).sendCommand(mode, 180);
-                ref.read(activeWorkoutProvider.notifier).startWorkout(mode);
-              },
-              child: Text(
-                'START',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 4.0,
-                ),
-              ),
-            ),
+          child: _AnimatedStartButton(
+            onPressed: () {
+              final mode = ref.read(selectedModeProvider);
+              final profile = ref.read(userProfileProvider);
+              ref.read(bleServiceProvider).sendCommand(mode, profile.maxHR);
+              ref.read(activeWorkoutProvider.notifier).startWorkout(mode);
+            },
           ),
         ),
       ],
@@ -179,16 +219,16 @@ class DashboardScreen extends ConsumerWidget {
           Text(
             mode.label.toUpperCase(),
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: AppTheme.textMuted,
-              letterSpacing: 2.0,
-            ),
+                  color: AppTheme.textMuted,
+                  letterSpacing: 2.0,
+                ),
           ),
           const SizedBox(height: 8),
           Text(
-            'TAP START TO BEGIN',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppTheme.textMuted,
-            ),
+            mode.subtitle,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textMuted,
+                ),
           ),
         ],
       ),
@@ -196,306 +236,85 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   // ═══════════════════════════════════════════════
-  //  BOTTOM SHEET — Mode Picker
+  //  ACTIVITY PICKER — Bottom Sheet
   // ═══════════════════════════════════════════════
   void _showModePicker(BuildContext context, WidgetRef ref) {
     final currentMode = ref.read(selectedModeProvider);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppTheme.surface,
       isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Drag handle
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceLight,
-                  borderRadius: BorderRadius.circular(2),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'SELECT ACTIVITY',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: AppTheme.textSecondary,
-                  letterSpacing: 2.0,
+                const SizedBox(height: 16),
+                Text(
+                  'SELECT ACTIVITY',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        letterSpacing: 1.5,
+                      ),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-              // ── Outdoor Section ──
-              _SectionLabel(label: 'OUTDOOR'),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.running,
-                isSelected: currentMode == SportMode.running,
-                onTap: () => _selectMode(ref, ctx, SportMode.running),
-              ),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.cycling,
-                isSelected: currentMode == SportMode.cycling,
-                onTap: () => _selectMode(ref, ctx, SportMode.cycling),
-              ),
+                // Outdoor
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('OUTDOOR', style: Theme.of(context).textTheme.labelSmall),
+                ),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.running, currentMode),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.cycling, currentMode),
+                const SizedBox(height: 16),
 
-              const SizedBox(height: 20),
-
-              // ── Indoor Section ──
-              _SectionLabel(label: 'INDOOR'),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.jumpRope,
-                isSelected: currentMode == SportMode.jumpRope,
-                onTap: () => _selectMode(ref, ctx, SportMode.jumpRope),
-              ),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.pushup,
-                isSelected: currentMode == SportMode.pushup,
-                onTap: () => _selectMode(ref, ctx, SportMode.pushup),
-              ),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.squat,
-                isSelected: currentMode == SportMode.squat,
-                onTap: () => _selectMode(ref, ctx, SportMode.squat),
-              ),
-              const SizedBox(height: 8),
-              _ModeSheetItem(
-                mode: SportMode.plank,
-                isSelected: currentMode == SportMode.plank,
-                onTap: () => _selectMode(ref, ctx, SportMode.plank),
-              ),
-            ],
+                // Indoor
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('INDOOR', style: Theme.of(context).textTheme.labelSmall),
+                ),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.jumpRope, currentMode),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.pushup, currentMode),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.squat, currentMode),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.plank, currentMode),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  void _selectMode(WidgetRef ref, BuildContext ctx, SportMode mode) {
-    ref.read(selectedModeProvider.notifier).state = mode;
-    Navigator.pop(ctx);
-  }
-
-  // ═══════════════════════════════════════════════
-  //  ACTIVE WORKOUT — Live Stats
-  // ═══════════════════════════════════════════════
-  Widget _buildActiveWorkout(
-    BuildContext context,
-    WidgetRef ref,
-    ActiveWorkoutState state,
-    int hr, int steps, int jumps,
-    String speed, String distance,
-    double pitch, String leanAngle,
-    bool gpsFix, double lat, double lng,
-  ) {
-    final h = state.durationSeconds ~/ 3600;
-    final m = (state.durationSeconds % 3600) ~/ 60;
-    final s = state.durationSeconds % 60;
-    final timeStr = '${h > 0 ? '$h:' : ''}${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-
-    return Column(
-      children: [
-        // ── Top Stats Grid ──
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _PrimaryStat(label: 'TIME', value: timeStr),
-                  ),
-                  Expanded(
-                    child: _PrimaryStat(label: 'AVG HR', value: hr.toString(), unit: 'bpm', isHighlight: true),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Secondary row based on mode
-              if (state.mode == SportMode.running || state.mode == SportMode.cycling)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _PrimaryStat(label: 'DISTANCE', value: distance, unit: 'km')),
-                    Expanded(child: _PrimaryStat(label: 'PACE', value: speed, unit: 'km/h')),
-                  ],
-                ),
-              if (state.mode == SportMode.jumpRope || state.mode == SportMode.pushup || state.mode == SportMode.squat)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _PrimaryStat(label: 'REPS', value: jumps.toString(), unit: 'reps')),
-                    Expanded(child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal')),
-                  ],
-                ),
-              if (state.mode == SportMode.running || state.mode == SportMode.jumpRope)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: pitch.abs() > 20.0 ? AppTheme.danger.withValues(alpha: 0.1) : AppTheme.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: pitch.abs() > 20.0 ? AppTheme.danger : AppTheme.success, width: 2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        pitch.abs() > 20.0
-                            ? 'POSTUR: MEMBUNGKUK (${pitch.abs().toStringAsFixed(1)}°)'
-                            : 'POSTUR: IDEAL (${pitch.abs().toStringAsFixed(1)}°)',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: pitch.abs() > 20.0 ? AppTheme.danger : AppTheme.success,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              if (state.mode == SportMode.plank)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: jumps == 0 ? AppTheme.success.withValues(alpha: 0.1) : AppTheme.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: jumps == 0 ? AppTheme.success : AppTheme.danger, width: 2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        jumps == 0 ? 'GOOD POSTURE' : 'WARNING: FIX FORM',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: jumps == 0 ? AppTheme.success : AppTheme.danger,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              if (state.mode == SportMode.cycling)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: Row(
-                    children: [
-                      Expanded(child: _PrimaryStat(label: 'LEAN ANGLE', value: leanAngle, unit: '°')),
-                      Expanded(child: _PrimaryStat(label: 'CALORIES', value: state.caloriesBurned.toStringAsFixed(0), unit: 'kcal')),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        // ── Map (Only for GPS modes) ──
-        if (state.mode.isOutdoor)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: OsmLiveMap(
-                routePoints: state.routePoints,
-                currentLat: lat,
-                currentLng: lng,
-                hasFix: gpsFix,
-              ),
-            ),
-          )
-        else
-          const Spacer(),
-
-        // ── FINISH Button ──
-        Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: SizedBox(
-            width: double.infinity,
-            height: 64,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.danger,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-              ),
-              onPressed: () {
-                ref.read(bleServiceProvider).sendCommand(SportMode.idle, 180);
-                ref.read(activeWorkoutProvider.notifier).stopWorkoutAndSave();
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.stop_circle_outlined, color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    'FINISH',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      letterSpacing: 2.0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════
-//  PRIVATE WIDGETS
-// ═══════════════════════════════════════════════
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  const _SectionLabel({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          letterSpacing: 2.0,
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeSheetItem extends StatelessWidget {
-  final SportMode mode;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ModeSheetItem({
-    required this.mode,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildModeItem(
+      BuildContext context, WidgetRef ref, SportMode mode, SportMode selected) {
+    final isSelected = mode == selected;
     return InkWell(
-      onTap: onTap,
+      onTap: () => _selectMode(ref, context, mode),
       borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.primary.withValues(alpha: 0.12) : AppTheme.background,
           borderRadius: BorderRadius.circular(12),
@@ -506,19 +325,39 @@ class _ModeSheetItem extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              mode.icon,
-              color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
-              size: 28,
-            ),
+            mode.hasCustomIcon
+                ? Image.asset(
+                    mode.customIconAsset!,
+                    width: 28,
+                    height: 28,
+                    color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                  )
+                : Icon(
+                    mode.icon,
+                    color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                    size: 28,
+                  ),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                mode.label.toUpperCase(),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
-                  letterSpacing: 1.0,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    mode.label.toUpperCase(),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                          letterSpacing: 1.0,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    mode.subtitle,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppTheme.textMuted,
+                          fontSize: 10,
+                        ),
+                  ),
+                ],
               ),
             ),
             if (isSelected)
@@ -528,54 +367,476 @@ class _ModeSheetItem extends StatelessWidget {
       ),
     );
   }
+
+  void _selectMode(WidgetRef ref, BuildContext ctx, SportMode mode) {
+    ref.read(selectedModeProvider.notifier).state = mode;
+    Navigator.pop(ctx);
+  }
+
+  // ═══════════════════════════════════════════════
+  //  ACTIVE WORKOUT — Live Stats (Redesigned)
+  // ═══════════════════════════════════════════════
+  Widget _buildActiveWorkout(
+    BuildContext context, WidgetRef ref, ActiveWorkoutState state,
+    int hr, int steps, int jumps,
+    String speed, String distance,
+    double pitch, bool gpsFix, double lat, double lng, int maxHR,
+  ) {
+    final h = state.durationSeconds ~/ 3600;
+    final m = (state.durationSeconds % 3600) ~/ 60;
+    final s = state.durationSeconds % 60;
+    final timeStr = '${h > 0 ? '$h:' : ''}${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+
+                // ── Mode badge + Timer ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Mode badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(state.mode.icon, color: AppTheme.primary, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            state.mode.label.toUpperCase(),
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  color: AppTheme.primary,
+                                  fontSize: 11,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Pause indicator
+                    if (state.isPaused)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'PAUSED',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: AppTheme.warning,
+                                fontSize: 10,
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // ── HR Hero Ring ──
+                HrRingWidget(
+                  heartRate: hr,
+                  maxHR: maxHR,
+                  size: 160,
+                ),
+                const SizedBox(height: 8),
+
+                // ── HR Zone Bar ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: HrZoneBar(heartRate: hr, maxHR: maxHR),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Metric Cards Row ──
+                _buildMetricCards(context, state, timeStr, hr, steps, jumps,
+                    speed, distance, pitch),
+                const SizedBox(height: 12),
+
+                // ── Posture Banner ──
+                if (state.mode == SportMode.running ||
+                    state.mode == SportMode.jumpRope)
+                  _buildPostureBanner(context, pitch),
+
+                if (state.mode == SportMode.plank)
+                  _buildPlankBanner(context, jumps),
+
+                // ── Map (outdoor) — constrained to 30% ──
+                if (state.mode.isOutdoor)
+                  SizedBox(
+                    height: 180,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: OsmLiveMap(
+                        routePoints: state.routePoints,
+                        currentLat: lat,
+                        currentLng: lng,
+                        hasFix: gpsFix,
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+
+        if (hr > 0 && maxHR > 0 && hr > maxHR)
+          _buildHrWarningBanner(context, ref),
+
+        // ── Bottom Controls: Pause + Slide to Finish ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Row(
+            children: [
+              // Pause/Resume button
+              SizedBox(
+                width: 56,
+                height: 56,
+                child: IconButton.filled(
+                  onPressed: () {
+                    if (state.isPaused) {
+                      ref.read(activeWorkoutProvider.notifier).resumeWorkout();
+                    } else {
+                      ref.read(activeWorkoutProvider.notifier).pauseWorkout();
+                    }
+                  },
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppTheme.surfaceLight,
+                    shape: const CircleBorder(),
+                  ),
+                  icon: Icon(
+                    state.isPaused ? Icons.play_arrow : Icons.pause,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Slide to Finish
+              Expanded(
+                child: SlideToAction(
+                  onSlideComplete: () {
+                    final profile = ref.read(userProfileProvider);
+                    ref.read(bleServiceProvider).sendCommand(SportMode.idle, profile.maxHR);
+                    final session = ref.read(activeWorkoutProvider.notifier).finishWorkout();
+                    if (session != null) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => WorkoutSummaryScreen(
+                            session: session,
+                            onSave: () {
+                              ref.read(activeWorkoutProvider.notifier).saveAndReset(session);
+                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricCards(BuildContext context, ActiveWorkoutState state,
+      String timeStr, int hr, int steps, int jumps,
+      String speed, String distance, double pitch) {
+
+    // Always show time and calories
+    final List<Widget> cards = [
+      Expanded(
+        child: GlassmorphicCard(
+          label: 'TIME',
+          value: timeStr,
+          icon: Icons.timer_outlined,
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: GlassmorphicCard(
+          label: 'CALORIES',
+          value: state.caloriesBurned.toStringAsFixed(0),
+          unit: 'kcal',
+          icon: Icons.local_fire_department,
+          accentColor: AppTheme.accent,
+        ),
+      ),
+    ];
+
+    // Mode-specific third card
+    Widget? thirdCard;
+    if (state.mode == SportMode.running) {
+      thirdCard = GlassmorphicCard(
+        label: 'STEPS',
+        value: steps > 0 ? '$steps' : '--',
+        icon: Icons.directions_walk,
+      );
+    } else if (state.mode == SportMode.cycling) {
+      thirdCard = GlassmorphicCard(
+        label: 'SPEED',
+        value: speed,
+        unit: 'km/h',
+        icon: Icons.speed,
+      );
+    } else if (state.mode == SportMode.jumpRope ||
+               state.mode == SportMode.pushup ||
+               state.mode == SportMode.squat) {
+      thirdCard = GlassmorphicCard(
+        label: 'REPS',
+        value: jumps > 0 ? '$jumps' : '--',
+        icon: Icons.fitness_center,
+        accentColor: AppTheme.primary,
+      );
+    } else if (state.mode == SportMode.plank) {
+      thirdCard = GlassmorphicCard(
+        label: 'HOLD',
+        value: timeStr,
+        icon: Icons.self_improvement,
+      );
+    }
+
+    if (thirdCard != null) {
+      cards.add(const SizedBox(width: 8));
+      cards.add(Expanded(child: thirdCard));
+    }
+
+    // Second row for outdoor modes
+    Widget? secondRow;
+    if (state.mode == SportMode.running || state.mode == SportMode.cycling) {
+      secondRow = Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: GlassmorphicCard(
+                label: 'DISTANCE',
+                value: distance,
+                unit: 'km',
+                icon: Icons.straighten,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GlassmorphicCard(
+                label: 'PACE',
+                value: speed,
+                unit: 'km/h',
+                icon: Icons.speed,
+              ),
+            ),
+            if (state.mode == SportMode.running) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: GlassmorphicCard(
+                  label: 'STEPS',
+                  value: steps > 0 ? '$steps' : '--',
+                  icon: Icons.directions_walk,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Row(children: cards),
+        ?secondRow,
+      ],
+    );
+  }
+
+  Widget _buildPostureBanner(BuildContext context, double pitch) {
+    final isGood = pitch.abs() <= 20.0;
+    final color = isGood ? AppTheme.success : AppTheme.danger;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isGood ? Icons.check_circle_outline : Icons.warning_amber,
+              color: color,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isGood
+                  ? 'POSTURE: GOOD (${pitch.abs().toStringAsFixed(1)}°)'
+                  : 'POSTURE: HUNCHING (${pitch.abs().toStringAsFixed(1)}°)',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlankBanner(BuildContext context, int jumps) {
+    final isGood = jumps == 0;
+    final color = isGood ? AppTheme.success : AppTheme.danger;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            isGood ? 'GOOD POSTURE ✓' : 'WARNING: FIX FORM',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHrWarningBanner(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.danger.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.danger.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'HIGH HEART RATE',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppTheme.danger,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  Text(
+                    'Slow down! Tap to mute alarm for 5m.',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppTheme.danger,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton.filled(
+              onPressed: () {
+                ref.read(activeWorkoutProvider.notifier).muteHrWarning();
+              },
+              style: IconButton.styleFrom(
+                backgroundColor: AppTheme.danger,
+              ),
+              icon: const Icon(Icons.volume_off, color: Colors.white, size: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _PrimaryStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  final bool isHighlight;
+// ═══════════════════════════════════════════════
+//  Animated START Button with breathing effect
+// ═══════════════════════════════════════════════
+class _AnimatedStartButton extends StatefulWidget {
+  final VoidCallback onPressed;
 
-  const _PrimaryStat({
-    required this.label,
-    required this.value,
-    this.unit,
-    this.isHighlight = false,
-  });
+  const _AnimatedStartButton({required this.onPressed});
+
+  @override
+  State<_AnimatedStartButton> createState() => _AnimatedStartButtonState();
+}
+
+class _AnimatedStartButtonState extends State<_AnimatedStartButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.02).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: isHighlight ? AppTheme.primary : AppTheme.textSecondary,
+    return ScaleTransition(
+      scale: _scaleAnim,
+      child: SizedBox(
+        width: double.infinity,
+        height: 64,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+            elevation: 8,
+            shadowColor: AppTheme.primary.withValues(alpha: 0.4),
+          ),
+          onPressed: widget.onPressed,
+          child: Text(
+            'START',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  letterSpacing: 4.0,
+                ),
           ),
         ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              value,
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                color: isHighlight ? AppTheme.primary : AppTheme.textPrimary,
-              ),
-            ),
-            if (unit != null) ...[
-              const SizedBox(width: 8),
-              Text(
-                unit!,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ]
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

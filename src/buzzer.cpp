@@ -47,13 +47,16 @@ static uint8_t        s_stepIndex = 0;
 static unsigned long  s_stepStartMs = 0;
 static bool           s_repeating = false;
 
+// Spinlock for thread safety between taskSensor and taskBuzzer
+static portMUX_TYPE s_buzzerMux = portMUX_INITIALIZER_UNLOCKED;
+
 static const BeepStep* getPatternSteps(BuzzerPattern pat, bool &repeat) {
     repeat = false;
     switch (pat) {
         case BUZZ_POWER_ON:      return PAT_POWER_ON;
         case BUZZ_BLE_CONNECTED: return PAT_BLE_CONN;
         case BUZZ_GPS_LOCK:      return PAT_GPS_LOCK;
-        case BUZZ_HR_WARNING:    repeat = false; return PAT_HR_WARN;
+        case BUZZ_HR_WARNING:    repeat = true; return PAT_HR_WARN;
         default:                 return nullptr;
     }
 }
@@ -70,6 +73,7 @@ void buzzer_trigger(BuzzerPattern pattern) {
         return;
     }
 
+    portENTER_CRITICAL(&s_buzzerMux);
     s_currentPattern = pattern;
     s_steps = getPatternSteps(pattern, s_repeating);
     s_stepIndex = 0;
@@ -79,17 +83,24 @@ void buzzer_trigger(BuzzerPattern pattern) {
         if (s_steps[0].on) BUZZER_ON();
         else BUZZER_OFF();
     }
+    portEXIT_CRITICAL(&s_buzzerMux);
 }
 
 void buzzer_stop() {
+    portENTER_CRITICAL(&s_buzzerMux);
     BUZZER_OFF();
     s_currentPattern = BUZZ_NONE;
     s_steps = nullptr;
     s_stepIndex = 0;
+    portEXIT_CRITICAL(&s_buzzerMux);
 }
 
 void buzzer_update() {
-    if (s_steps == nullptr || s_currentPattern == BUZZ_NONE) return;
+    portENTER_CRITICAL(&s_buzzerMux);
+    if (s_steps == nullptr || s_currentPattern == BUZZ_NONE) {
+        portEXIT_CRITICAL(&s_buzzerMux);
+        return;
+    }
 
     const BeepStep &step = s_steps[s_stepIndex];
 
@@ -102,8 +113,12 @@ void buzzer_update() {
             if (s_steps[0].on) BUZZER_ON();
             else BUZZER_OFF();
         } else {
-            buzzer_stop();
+            BUZZER_OFF();
+            s_currentPattern = BUZZ_NONE;
+            s_steps = nullptr;
+            s_stepIndex = 0;
         }
+        portEXIT_CRITICAL(&s_buzzerMux);
         return;
     }
 
@@ -119,19 +134,29 @@ void buzzer_update() {
                 if (s_steps[0].on) BUZZER_ON();
                 else BUZZER_OFF();
             } else {
-                buzzer_stop();
+                BUZZER_OFF();
+                s_currentPattern = BUZZ_NONE;
+                s_steps = nullptr;
+                s_stepIndex = 0;
             }
         } else {
             if (s_steps[s_stepIndex].on) BUZZER_ON();
             else BUZZER_OFF();
         }
     }
+    portEXIT_CRITICAL(&s_buzzerMux);
 }
 
 bool buzzer_is_playing() {
-    return (s_currentPattern != BUZZ_NONE && s_steps != nullptr);
+    portENTER_CRITICAL(&s_buzzerMux);
+    bool playing = (s_currentPattern != BUZZ_NONE && s_steps != nullptr);
+    portEXIT_CRITICAL(&s_buzzerMux);
+    return playing;
 }
 
 BuzzerPattern buzzer_get_pattern() {
-    return s_currentPattern;
+    portENTER_CRITICAL(&s_buzzerMux);
+    BuzzerPattern pat = s_currentPattern;
+    portEXIT_CRITICAL(&s_buzzerMux);
+    return pat;
 }

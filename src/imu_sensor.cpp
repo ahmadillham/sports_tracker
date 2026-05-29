@@ -32,6 +32,9 @@
 #define HMC5883L_REG_MODE       0x02
 #define HMC5883L_REG_DATAX_H    0x03  // 6 bytes: XH,XL,ZH,ZL,YH,YL (note Z before Y!)
 
+// ── Cached magnetometer availability ──
+static bool s_hasHMC = false;
+
 // ──────────────────────────────────────────────
 //  Helper: Write a single byte to an I2C register
 // ──────────────────────────────────────────────
@@ -85,8 +88,8 @@ bool imu_init() {
         return false;
     }
     
-    bool hasHMC = devicePresent(HMC5883L_ADDR);
-    if (!hasHMC) {
+    s_hasHMC = devicePresent(HMC5883L_ADDR);
+    if (!s_hasHMC) {
         Serial.println("[IMU] HMC5883L not found (Likely QMC5883L at 0x0D). Magnetometer disabled.");
     }
 
@@ -108,7 +111,7 @@ bool imu_init() {
     writeRegister(ITG3200_ADDR, ITG3200_REG_SMPLRT_DIV, 0x09);
 
     // ── HMC5883L Init (Optional) ──
-    if (hasHMC) {
+    if (s_hasHMC) {
         // 8 samples averaged, 75 Hz output rate, normal measurement
         writeRegister(HMC5883L_ADDR, HMC5883L_REG_CONFIG_A, 0x78);
         // Gain = ±1.3 Ga (default)
@@ -140,8 +143,8 @@ bool imu_read(IMURawData &data) {
     data.gy = (int16_t)(buf[2] << 8 | buf[3]);
     data.gz = (int16_t)(buf[4] << 8 | buf[5]);
 
-    // ── Read HMC5883L (Optional) ──
-    if (devicePresent(HMC5883L_ADDR)) {
+    // ── Read HMC5883L (Optional — uses cached presence from init) ──
+    if (s_hasHMC) {
         if (readRegisters(HMC5883L_ADDR, HMC5883L_REG_DATAX_H, buf, 6)) {
             data.mx = (int16_t)(buf[0] << 8 | buf[1]);
             data.mz = (int16_t)(buf[2] << 8 | buf[3]);  // Z comes before Y

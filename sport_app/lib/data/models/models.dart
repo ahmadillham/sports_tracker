@@ -211,11 +211,12 @@ class DataParser {
     );
   }
 
-  /// Pack command: [SportMode:u8][MaxHR:u16 LE] = 3 bytes.
-  static List<int> packCommand(SportMode mode, int maxHR) {
-    final data = ByteData(3);
+  /// Pack command: [SportMode:u8][MaxHR:u16 LE][MuteFlag:u8] = 4 bytes.
+  static List<int> packCommand(SportMode mode, int maxHR, {bool muteWarning = false}) {
+    final data = ByteData(4);
     data.setUint8(0, mode.code);
     data.setUint16(1, maxHR, Endian.little);
+    data.setUint8(3, muteWarning ? 1 : 0);
     return data.buffer.asUint8List().toList();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/ble_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/workout_provider.dart';
 import 'history_detail_screen.dart';

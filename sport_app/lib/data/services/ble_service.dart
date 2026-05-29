@@ -19,6 +19,7 @@ class BleService {
   bool _shouldReconnect = true;
   StreamSubscription<BluetoothConnectionState>? _connectionSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
+  final List<StreamSubscription> _notifySubs = [];
 
   // ── Public Streams ──
   Stream<SensorData> get sensorStream => _sensorController.stream;
@@ -97,6 +98,12 @@ class BleService {
 
   /// Discover GATT services and subscribe to notification characteristics.
   Future<void> _discoverAndSubscribe(BluetoothDevice device) async {
+    // Cancel any existing notification subscriptions to prevent duplicates
+    for (final sub in _notifySubs) {
+      sub.cancel();
+    }
+    _notifySubs.clear();
+
     final services = await device.discoverServices();
 
     for (final svc in services) {
@@ -110,15 +117,15 @@ class BleService {
           if (charUuid == BleConstants.sensorDataCharUuid) {
             _sensorChar = char;
             await char.setNotifyValue(true);
-            char.onValueReceived.listen((bytes) {
+            _notifySubs.add(char.onValueReceived.listen((bytes) {
               _sensorController.add(DataParser.parseSensorData(bytes));
-            });
+            }));
           } else if (charUuid == BleConstants.gpsDataCharUuid) {
             _gpsChar = char;
             await char.setNotifyValue(true);
-            char.onValueReceived.listen((bytes) {
+            _notifySubs.add(char.onValueReceived.listen((bytes) {
               _gpsController.add(DataParser.parseGpsData(bytes));
-            });
+            }));
           } else if (charUuid == BleConstants.commandCharUuid) {
             _commandChar = char;
           }
@@ -127,13 +134,13 @@ class BleService {
     }
   }
 
-  /// Send sport mode and max HR threshold to the ESP32.
-  Future<void> sendCommand(SportMode mode, int maxHR) async {
+  /// Send sport mode, max HR threshold, and optional mute flag to the ESP32.
+  Future<void> sendCommand(SportMode mode, int maxHR, {bool muteWarning = false}) async {
     if (_commandChar == null) return;
-    final bytes = DataParser.packCommand(mode, maxHR);
+    final bytes = DataParser.packCommand(mode, maxHR, muteWarning: muteWarning);
     try {
       await _commandChar!.write(bytes, withoutResponse: false);
-      print('[BLE] Sent command: mode=${mode.label}, maxHR=$maxHR');
+      print('[BLE] Sent command: mode=${mode.label}, maxHR=$maxHR, mute=$muteWarning');
     } catch (e) {
       print('[BLE] Write error: $e');
     }
@@ -176,6 +183,12 @@ class BleService {
     _shouldReconnect = false;
     _connectionSub?.cancel();
     _scanSub?.cancel();
+
+    // Cancel all notification subscriptions
+    for (final sub in _notifySubs) {
+      sub.cancel();
+    }
+    _notifySubs.clear();
 
     try {
       await _device?.disconnect();

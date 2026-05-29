@@ -18,7 +18,7 @@
 #include "config.h"
 
 // ── State variables ──
-static uint16_t s_bpm = 0;
+static volatile uint16_t s_bpm = 0;
 static bool     s_aboveThreshold = false;
 static unsigned long s_lastPeakMs = 0;
 
@@ -49,11 +49,23 @@ uint16_t hr_update() {
     if (!hr_leads_on()) {
         s_bpm = 0;
         s_aboveThreshold = false;
+        s_lastPeakMs = 0;
+        // Reset moving average buffer so reconnection starts fresh
+        s_bpmCount = 0;
+        s_bpmIndex = 0;
         return 0;
     }
 
     int adcValue = analogRead(PIN_HR_OUTPUT);
     unsigned long now = millis();
+
+    // Timeout: if no peak detected within 3 seconds, signal is lost
+    if (s_lastPeakMs > 0 && (now - s_lastPeakMs) > HR_TIMEOUT_MS) {
+        s_bpm = 0;
+        s_lastPeakMs = 0;
+        s_bpmCount = 0;
+        s_bpmIndex = 0;
+    }
 
     // Peak detection: look for rising edge crossing the threshold
     if (adcValue > HR_THRESHOLD && !s_aboveThreshold) {

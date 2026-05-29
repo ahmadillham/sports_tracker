@@ -16,7 +16,6 @@ static uint32_t s_repCount = 0; // Shared for jumps, push-ups, squats
 static float    s_repFiltered = 1.0f;
 static bool     s_repAbove = false;
 static unsigned long s_lastRepMs = 0;
-static bool     s_repHalfCycle = false; // Toggle for full-cycle counting (push-up/squat)
 
 static float s_pitch = 0.0f;
 static float s_roll  = 0.0f;
@@ -32,8 +31,6 @@ void algo_init() {
     s_stepFiltered = 1.0f; s_repFiltered = 1.0f;
     s_stepAbove = false; s_repAbove = false;
     s_lastStepMs = 0; s_lastRepMs = 0;
-    s_pitch = 0.0f; s_roll = 0.0f;
-    s_repHalfCycle = false;
     s_postureInit = false;
     s_plankInit = false;
 }
@@ -95,9 +92,11 @@ PostureData algo_update_posture(const IMURawData &data, float dt) {
         s_roll  = accelRoll;
         s_postureInit = true;
     } else {
-        s_pitch = COMPLEMENTARY_ALPHA * (s_pitch + gx * dt) +
+        // Pitch uses gy (rotation around Y axis affects ax)
+        s_pitch = COMPLEMENTARY_ALPHA * (s_pitch + gy * dt) +
                   (1.0f - COMPLEMENTARY_ALPHA) * accelPitch;
-        s_roll  = COMPLEMENTARY_ALPHA * (s_roll  + gy * dt) +
+        // Roll uses gx (rotation around X axis affects ay)
+        s_roll  = COMPLEMENTARY_ALPHA * (s_roll  + gx * dt) +
                   (1.0f - COMPLEMENTARY_ALPHA) * accelRoll;
     }
 
@@ -114,6 +113,7 @@ void algo_reset_counters() {
     s_stepCount = 0; s_repCount = 0;
     s_stepFiltered = 1.0f; s_repFiltered = 1.0f;
     s_stepAbove = false; s_repAbove = false;
+    s_lastStepMs = 0; s_lastRepMs = 0;
     s_plankInit = false;
 }
 
@@ -130,14 +130,9 @@ bool algo_detect_pushup(const IMURawData &data) {
     } else if (s_repFiltered < (PUSHUP_THRESHOLD - 0.15f) && s_repAbove) {
         s_repAbove = false;
         if (now - s_lastRepMs >= PUSHUP_DEBOUNCE_MS) {
-            // Toggle half-cycle: only count on every 2nd peak (full up+down = 1 rep)
-            s_repHalfCycle = !s_repHalfCycle;
-            if (s_repHalfCycle) {
-                s_repCount++;
-                s_lastRepMs = now;
-                return true;
-            }
+            s_repCount++;
             s_lastRepMs = now;
+            return true;
         }
     }
     return false;
@@ -156,14 +151,9 @@ bool algo_detect_squat(const IMURawData &data) {
     } else if (s_repFiltered < (SQUAT_THRESHOLD - 0.15f) && s_repAbove) {
         s_repAbove = false;
         if (now - s_lastRepMs >= SQUAT_DEBOUNCE_MS) {
-            // Toggle half-cycle: only count on every 2nd peak (full up+down = 1 rep)
-            s_repHalfCycle = !s_repHalfCycle;
-            if (s_repHalfCycle) {
-                s_repCount++;
-                s_lastRepMs = now;
-                return true;
-            }
+            s_repCount++;
             s_lastRepMs = now;
+            return true;
         }
     }
     return false;

@@ -12,6 +12,8 @@
 #include "ble_server.h"
 #include "config.h"
 #include "buzzer.h"
+#include "gps_sensor.h"
+#include "sport_algo.h"
 
 #include <NimBLEDevice.h>
 
@@ -48,10 +50,34 @@ class CommandCB : public NimBLECharacteristicCallbacks {
             uint8_t mode = (uint8_t)val[0];
             uint16_t maxHR = (uint16_t)((uint8_t)val[1] | ((uint8_t)val[2] << 8));
 
+            // Validate sport mode range
+            if (mode > MODE_PLANK) {
+                Serial.printf("[BLE] CMD: invalid mode=%d, ignoring\n", mode);
+                return;
+            }
+
+            SportMode oldMode = MODE_IDLE;
             if (xSemaphoreTake(xDataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                oldMode = g_commandData.sportMode;
                 g_commandData.sportMode = (SportMode)mode;
                 g_commandData.maxHR = maxHR;
                 xSemaphoreGive(xDataMutex);
+            }
+
+            // Reset counters & distance when mode changes (new workout)
+            if ((SportMode)mode != oldMode) {
+                algo_reset_counters();
+                gps_reset_distance();
+                Serial.printf("[BLE] Mode changed %d -> %d, counters reset\n", oldMode, mode);
+            }
+
+            if (val.size() >= 4) {
+                uint8_t muteFlag = (uint8_t)val[3];
+                if (muteFlag == 1) {
+                    g_hrMutedUntil = millis() + HR_WARN_MUTE_DURATION_MS;
+                    buzzer_stop();
+                    Serial.println("[BLE] HR Warning muted via app.");
+                }
             }
 
             Serial.printf("[BLE] CMD: mode=%d, maxHR=%d\n", mode, maxHR);
@@ -68,8 +94,12 @@ void ble_init() {
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);  // Max TX power
     NimBLEDevice::setMTU(185);
 
+    // Use static callback instances to avoid heap allocation
+    static ServerCB  serverCB;
+    static CommandCB commandCB;
+
     pServer = NimBLEDevice::createServer();
-    pServer->setCallbacks(new ServerCB());
+    pServer->setCallbacks(&serverCB);
 
     // ── Custom Sport Service ──
     NimBLEService *pSportSvc = pServer->createService(SERVICE_SPORT_UUID);
@@ -91,7 +121,7 @@ void ble_init() {
         CHAR_COMMAND_UUID,
         NIMBLE_PROPERTY::WRITE
     );
-    pCommandChar->setCallbacks(new CommandCB());
+    pCommandChar->setCallbacks(&commandCB);
 
     pSportSvc->start();
 
