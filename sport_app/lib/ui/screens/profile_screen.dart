@@ -60,7 +60,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           duration: Duration(seconds: 2),
         ),
       );
-      Navigator.of(context).pop();
+      // Remove Navigator.pop(context) since Profile is now a tab
     }
   }
 
@@ -69,6 +69,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('PROFILE'),
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -198,6 +199,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ?.copyWith(color: AppTheme.textMuted),
             filled: true,
             fillColor: AppTheme.surface,
+            suffixIcon: const Icon(Icons.edit, size: 20, color: AppTheme.textMuted),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppTheme.surfaceLight),

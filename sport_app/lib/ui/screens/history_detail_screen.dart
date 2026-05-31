@@ -30,6 +30,9 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
         .map((p) => LatLng(p[0], p[1]))
         .toList();
 
+    final bounds = polylinePoints.isNotEmpty ? LatLngBounds.fromPoints(polylinePoints) : null;
+    final isBoundsValid = bounds != null && bounds.southWest != bounds.northEast;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.session.mode.label.toUpperCase()} ACTIVITY'),
@@ -121,10 +124,16 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCameraFit: CameraFit.bounds(
-                      bounds: LatLngBounds.fromPoints(polylinePoints),
-                      padding: const EdgeInsets.all(50.0),
-                    ),
+                    initialCameraFit: isBoundsValid
+                        ? CameraFit.bounds(
+                            bounds: bounds,
+                            padding: const EdgeInsets.all(50.0),
+                          )
+                        : null,
+                    initialCenter: (!isBoundsValid && polylinePoints.isNotEmpty)
+                        ? polylinePoints.first
+                        : const LatLng(0, 0),
+                    initialZoom: 16.0,
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.none, // Static map
                     ),

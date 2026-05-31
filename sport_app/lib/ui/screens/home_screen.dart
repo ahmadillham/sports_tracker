@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/ble_provider.dart';
 import '../widgets/pulse_animation.dart';
-import 'dashboard_screen.dart';
+import 'main_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -76,7 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _navigateToDashboard() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      MaterialPageRoute(builder: (_) => const MainScreen()),
     );
   }
 

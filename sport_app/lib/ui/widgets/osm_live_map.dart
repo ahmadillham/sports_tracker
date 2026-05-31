@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/theme/app_theme.dart';
+import 'pulse_animation.dart';
 
 class OsmLiveMap extends StatefulWidget {
   final List<List<double>> routePoints;
@@ -123,7 +124,18 @@ class _OsmLiveMapState extends State<OsmLiveMap> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.gps_off, color: AppTheme.textMuted, size: 32),
+                    PulseAnimation(
+                      size: 100,
+                      color: AppTheme.textMuted,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.surfaceLight.withValues(alpha: 0.1),
+                        ),
+                        child: const Icon(Icons.gps_off, color: AppTheme.textMuted, size: 32),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       'WAITING FOR GPS LOCK',

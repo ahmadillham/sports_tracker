@@ -39,7 +39,9 @@ enum SportMode {
   squat(0x05, 'Squat', Icons.sports_martial_arts, 'Reps · Calories',
       customIconAsset: 'assets/icons/squat.png'),
   plank(0x06, 'Plank', Icons.self_improvement, 'Duration · Posture Feedback',
-      customIconAsset: 'assets/icons/plank.png');
+      customIconAsset: 'assets/icons/plank.png'),
+  hrMonitor(0x07, 'HR Monitor', Icons.favorite, 'Real-time Heart Rate'),
+  postureCorrection(0x08, 'Posture', Icons.balance, 'Live Posture Calibration');
 
   const SportMode(this.code, this.label, this.icon, this.subtitle,
       {this.customIconAsset});
@@ -56,5 +58,8 @@ enum SportMode {
   bool get isOutdoor => this == running || this == cycling;
 
   /// Whether this mode is an indoor calisthenics mode
-  bool get isIndoor => !isOutdoor && this != idle;
+  bool get isIndoor => !isOutdoor && !isHealthTool && this != idle;
+
+  /// Whether this mode is a health/tool mode
+  bool get isHealthTool => this == hrMonitor || this == postureCorrection;
 }

@@ -68,35 +68,38 @@ class _SlideToActionState extends State<SlideToAction>
                   ),
                 ),
                 // Label
-                Center(
-                  child: AnimatedBuilder(
-                    animation: _shimmerController,
-                    builder: (context, child) {
-                      return Opacity(
-                        opacity: (1.0 - progress).clamp(0.3, 1.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.label,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                    letterSpacing: 2.0,
-                                  ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              color: Colors.white.withValues(alpha: 0.5),
-                              size: 14,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                Padding(
+                  padding: const EdgeInsets.only(left: 56.0),
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _shimmerController,
+                      builder: (context, child) {
+                        return Opacity(
+                          opacity: (1.0 - progress).clamp(0.3, 1.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                widget.label,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                      letterSpacing: 2.0,
+                                    ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 14,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
                 // Draggable thumb

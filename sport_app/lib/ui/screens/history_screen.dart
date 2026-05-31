@@ -15,7 +15,8 @@ class HistoryScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ACTIVITIES'),
+        title: const Text('HISTORY'),
+        automaticallyImplyLeading: false,
       ),
       body: workouts.isEmpty
           ? Center(
@@ -83,14 +84,23 @@ class HistoryScreen extends ConsumerWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            if (session.mode == SportMode.running || session.mode == SportMode.cycling)
-                              _MiniStat(label: 'Distance', value: '${session.distance.toStringAsFixed(2)} km')
-                            else if (session.mode == SportMode.plank)
-                              _MiniStat(label: 'Posture', value: session.jumps == 0 ? 'Good' : 'Warning')
-                            else
-                              _MiniStat(label: 'Reps', value: '${session.jumps}'),
-                            _MiniStat(label: 'Time', value: session.formattedDuration),
-                            _MiniStat(label: 'Avg HR', value: '${session.avgHeartRate} bpm'),
+                            Expanded(
+                              child: Builder(builder: (context) {
+                                if (session.mode == SportMode.running || session.mode == SportMode.cycling) {
+                                  return _MiniStat(label: 'Distance', value: '${session.distance.toStringAsFixed(2)} km');
+                                } else if (session.mode == SportMode.plank) {
+                                  return _MiniStat(label: 'Posture', value: session.jumps == 0 ? 'Good' : 'Warning');
+                                } else {
+                                  return _MiniStat(label: 'Reps', value: '${session.jumps}');
+                                }
+                              }),
+                            ),
+                            Expanded(
+                              child: _MiniStat(label: 'Time', value: session.formattedDuration),
+                            ),
+                            Expanded(
+                              child: _MiniStat(label: 'Avg HR', value: '${session.avgHeartRate} bpm'),
+                            ),
                           ],
                         )
                       ],

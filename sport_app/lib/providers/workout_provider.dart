@@ -220,7 +220,7 @@ class ActiveWorkoutNotifier extends StateNotifier<ActiveWorkoutState> {
   WorkoutSession? finishWorkout() {
     _timer?.cancel();
 
-    if (state.durationSeconds < 5) {
+    if (state.durationSeconds < 5 || state.mode.isHealthTool) {
       reset();
       return null;
     }

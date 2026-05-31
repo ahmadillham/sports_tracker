@@ -64,7 +64,9 @@ enum SportMode : uint8_t {
     MODE_JUMP_ROPE  = 0x03,
     MODE_PUSHUP     = 0x04,
     MODE_SQUAT      = 0x05,
-    MODE_PLANK      = 0x06
+    MODE_PLANK      = 0x06,
+    MODE_HR_MONITOR = 0x07,
+    MODE_POSTURE    = 0x08
 };
 
 // ──────────────────────────────────────────────
@@ -130,7 +132,7 @@ extern volatile unsigned long g_hrMutedUntil;
 
 // Jump detection
 #define JUMP_THRESHOLD              1.90f   // G-force threshold for jump peak
-#define JUMP_DEBOUNCE_MS            450     // Minimum ms between jumps
+#define JUMP_DEBOUNCE_MS            0       // Disabled as requested (was 450)
 
 // Push-up detection
 #define PUSHUP_THRESHOLD            1.25f   // G-force threshold for push-up peak
@@ -155,6 +157,10 @@ extern volatile unsigned long g_hrMutedUntil;
 
 // Posture complementary filter
 #define COMPLEMENTARY_ALPHA         0.96f
+
+// IMU Calibration Offsets (in degrees)
+#define IMU_PITCH_OFFSET            12.7f
+#define IMU_ROLL_OFFSET             0.0f
 
 // FreeRTOS Task Stack Sizes
 #define STACK_SIZE_BLE              4096

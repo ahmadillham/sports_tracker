@@ -84,8 +84,8 @@ PostureData algo_update_posture(const IMURawData &data, float dt) {
     float gx = imu_gyro_to_dps(data.gx);
     float gy = imu_gyro_to_dps(data.gy);
 
-    float accelPitch = atan2f(ax, sqrtf(ay*ay + az*az)) * 180.0f / M_PI;
-    float accelRoll  = atan2f(ay, sqrtf(ax*ax + az*az)) * 180.0f / M_PI;
+    float accelPitch = (atan2f(ax, sqrtf(ay*ay + az*az)) * 180.0f / M_PI) - IMU_PITCH_OFFSET;
+    float accelRoll  = (atan2f(ay, sqrtf(ax*ax + az*az)) * 180.0f / M_PI) - IMU_ROLL_OFFSET;
 
     if (!s_postureInit) {
         s_pitch = accelPitch;

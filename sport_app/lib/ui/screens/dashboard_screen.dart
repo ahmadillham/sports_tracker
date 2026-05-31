@@ -10,11 +10,8 @@ import '../widgets/hr_ring_widget.dart';
 import '../widgets/glassmorphic_card.dart';
 import '../widgets/hr_zone_bar.dart';
 import '../widgets/slide_to_action.dart';
-import 'history_screen.dart';
-import 'profile_screen.dart';
+
 import 'workout_summary_screen.dart';
-import 'hr_monitor_screen.dart';
-import 'posture_screen.dart';
 
 /// A Riverpod provider to track the currently *selected* mode before starting.
 final selectedModeProvider = StateProvider<SportMode>((ref) => SportMode.running);
@@ -40,70 +37,7 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('SPORT TRACKER'),
-      ),
-      drawer: Drawer(
-        backgroundColor: AppTheme.surface,
-        child: Column(
-          children: [
-            const SizedBox(height: 64),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.directions_run, color: AppTheme.primary),
-              ),
-              title: Text(
-                'SPORT TRACKER', 
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold, 
-                  letterSpacing: 1.5,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ),
-            const Divider(color: AppTheme.surfaceLight, height: 32),
-            ListTile(
-              leading: const Icon(Icons.dashboard, color: AppTheme.textSecondary),
-              title: const Text('Dashboard'),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.favorite, color: AppTheme.danger),
-              title: const Text('Heart Rate Monitor'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HrMonitorScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.balance, color: AppTheme.success),
-              title: const Text('Posture Correction'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PostureScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.history, color: AppTheme.textSecondary),
-              title: const Text('History'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_outline, color: AppTheme.textSecondary),
-              title: const Text('Profile'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
-              },
-            ),
-          ],
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: Column(
         children: [
@@ -299,6 +233,17 @@ class DashboardScreen extends ConsumerWidget {
                 _buildModeItem(context, ref, SportMode.squat, currentMode),
                 const SizedBox(height: 8),
                 _buildModeItem(context, ref, SportMode.plank, currentMode),
+                const SizedBox(height: 16),
+                
+                // Health / Tools
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('HEALTH / TOOLS', style: Theme.of(context).textTheme.labelSmall),
+                ),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.hrMonitor, currentMode),
+                const SizedBox(height: 8),
+                _buildModeItem(context, ref, SportMode.postureCorrection, currentMode),
               ],
             ),
           ),
@@ -442,24 +387,31 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // ── HR Hero Ring ──
-                HrRingWidget(
-                  heartRate: hr,
-                  maxHR: maxHR,
-                  size: 160,
-                ),
-                const SizedBox(height: 8),
+                // ── HR Hero Ring (Hidden for Posture Mode) ──
+                if (state.mode != SportMode.postureCorrection) ...[
+                  HrRingWidget(
+                    heartRate: hr,
+                    maxHR: maxHR,
+                    size: state.mode == SportMode.hrMonitor ? 200 : 160,
+                  ),
+                  const SizedBox(height: 8),
 
-                // ── HR Zone Bar ──
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: HrZoneBar(heartRate: hr, maxHR: maxHR),
-                ),
-                const SizedBox(height: 16),
+                  // ── HR Zone Bar ──
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: HrZoneBar(heartRate: hr, maxHR: maxHR),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-                // ── Metric Cards Row ──
-                _buildMetricCards(context, state, timeStr, hr, steps, jumps,
-                    speed, distance, pitch),
+                // ── Posture Visualizer (Only for Posture Mode) ──
+                if (state.mode == SportMode.postureCorrection)
+                  _buildLivePostureVisualizer(context, ref),
+
+                // ── Metric Cards Row (Hidden for Health/Tools modes) ──
+                if (!state.mode.isHealthTool)
+                  _buildMetricCards(context, state, timeStr, hr, steps, jumps,
+                      speed, distance, pitch),
                 const SizedBox(height: 12),
 
                 // ── Posture Banner ──
@@ -537,14 +489,14 @@ class DashboardScreen extends ConsumerWidget {
                             session: session,
                             onSave: () {
                               ref.read(activeWorkoutProvider.notifier).saveAndReset(session);
-                              Navigator.of(context).popUntil((route) => route.isFirst);
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const DashboardScreen()),
-                              );
+                              Navigator.of(context).pop();
                             },
                           ),
                         ),
                       );
+                    } else {
+                      // If it's a health tool (no session saved) or too short, just go back to idle
+                      ref.read(activeWorkoutProvider.notifier).reset();
                     }
                   },
                 ),
@@ -773,6 +725,130 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  //  LIVE POSTURE VISUALIZER (For Health/Tools Mode)
+  // ═══════════════════════════════════════════════
+  Widget _buildLivePostureVisualizer(BuildContext context, WidgetRef ref) {
+    final sensorData = ref.watch(sensorDataProvider).valueOrNull;
+    final pitch = sensorData?.pitch ?? 0.0;
+    final roll = sensorData?.roll ?? 0.0;
+    
+    final isPitchGood = pitch.abs() <= 15.0;
+    final isRollGood = roll.abs() <= 15.0;
+    final isPostureGood = isPitchGood && isRollGood;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24.0),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 240,
+            child: Center(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Target area (safe zone)
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.success.withValues(alpha: 0.1),
+                      border: Border.all(
+                        color: AppTheme.success.withValues(alpha: 0.3),
+                        width: 2,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                  ),
+                  
+                  // Outer boundary ring
+                  Container(
+                    width: 220,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppTheme.surfaceLight,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  
+                  // Axes
+                  Container(width: 220, height: 1, color: AppTheme.surfaceLight.withValues(alpha: 0.5)),
+                  Container(width: 1, height: 220, color: AppTheme.surfaceLight.withValues(alpha: 0.5)),
+                  
+                  // Marker
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 100),
+                    curve: Curves.easeOut,
+                    top: 110 - 10 - (pitch.clamp(-90.0, 90.0) / 90.0 * 110),
+                    left: 110 - 10 + (roll.clamp(-90.0, 90.0) / 90.0 * 110),
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isPostureGood ? AppTheme.success : AppTheme.danger,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isPostureGood ? AppTheme.success : AppTheme.danger).withValues(alpha: 0.5),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          Text(
+            isPostureGood ? 'GOOD POSTURE' : 'ADJUST YOUR POSTURE',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: isPostureGood ? AppTheme.success : AppTheme.danger,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Keep the dot inside the green circle (±15°)',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textMuted,
+                ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: GlassmorphicCard(
+                  label: 'PITCH',
+                  value: '${pitch.toStringAsFixed(1)}°',
+                  icon: Icons.height,
+                  accentColor: isPitchGood ? AppTheme.success : AppTheme.danger,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GlassmorphicCard(
+                  label: 'ROLL',
+                  value: '${roll.toStringAsFixed(1)}°',
+                  icon: Icons.swap_horiz,
+                  accentColor: isRollGood ? AppTheme.success : AppTheme.danger,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
